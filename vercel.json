@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/DigiTronics_v5.html" }
+  ]
+}
