@@ -3916,7 +3916,7 @@ window.addEventListener('load', async () => {
   // لو مفيش token → اطلبه مرة واحدة بس ويتحفظ تلقائياً
   if (!token && gistId) {
     setTimeout(() => {
-      const t = prompt('🔑 أدخل GitHub Token مرة واحدة بس\n(من github.com/settings/tokens — صلاحية gist فقط)\n\nبعدها يتحفظ تلقائياً ومش هيطلبه تاني:');
+      const t = prompt('🔑 أدخل Key مرة واحدة بس\n(0)\n\nبعدها يتحفظ تلقائياً ومش هيطلبه تاني:');
       if (t && t.trim()) {
         token = t.trim();
         localStorage.setItem(GH_TOKEN_KEY, token);
