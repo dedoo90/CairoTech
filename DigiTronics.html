@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>CairoTech - نظام إدارة متكامل بالسيريالات</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap');
+:root {
+  --bg:#f0f4f8; --surface:#ffffff; --surface2:#e8edf3; --border:#c8d6e5;
+  --accent:#0066ff; --accent2:#0044cc; --green:#00a854; --red:#e53935;
+  --yellow:#f9a825; --purple:#7c3aed; --orange:#e65100;
+  --text:#1a2235; --text2:#4a6080;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+#loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at center,#dce8f8 0%,#f0f4f8 70%);}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:48px 40px;width:400px;max-width:95vw;box-shadow:0 0 60px rgba(0,100,255,0.15);text-align:center;}
+.login-logo{font-size:2.4rem;font-weight:900;color:var(--accent);margin-bottom:4px;}
+.login-sub{color:var(--text2);font-size:0.9rem;margin-bottom:32px;}
+.form-group{margin-bottom:16px;text-align:right;}
+.form-group label{display:block;font-size:0.85rem;color:var(--text2);margin-bottom:7px;}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px 14px;color:var(--text);font-family:'Cairo',sans-serif;font-size:0.9rem;outline:none;}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent);}
+.btn-primary{width:100%;background:linear-gradient(135deg,var(--accent2),var(--accent));color:#fff;border:none;border-radius:10px;padding:13px;font-family:'Cairo',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;margin-top:8px;}
+.btn-primary:hover{transform:translateY(-2px);}
+#loginError{color:var(--red);font-size:0.85rem;margin-top:12px;display:none;}
+#app{display:none;}
+.sidebar{position:fixed;top:0;right:0;width:245px;height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:100;overflow-y:auto;}
+.sidebar-logo{padding:20px;font-size:1.3rem;font-weight:900;color:var(--accent);border-bottom:1px solid var(--border);}
+.nav-section{padding:10px 0;}
+.nav-section-title{padding:6px 20px;font-size:0.72rem;color:var(--text2);font-weight:700;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:11px 20px;cursor:pointer;color:var(--text2);font-size:0.9rem;font-weight:600;border-right:3px solid transparent;}
+.nav-item:hover{background:var(--surface2);color:var(--text);}
+.nav-item.active{color:var(--accent);border-right-color:var(--accent);background:rgba(0,212,255,0.05);}
+.nav-item .icon{font-size:1.1rem;width:22px;}
+.sidebar-footer{padding:14px 18px;border-top:1px solid var(--border);margin-top:auto;}
+.user-badge{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
+.avatar{width:34px;height:34px;background:linear-gradient(135deg,var(--accent2),var(--accent));border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;}
+.btn-logout{width:100%;background:rgba(255,82,82,0.1);color:var(--red);border:1px solid rgba(255,82,82,0.3);border-radius:8px;padding:8px;cursor:pointer;}
+.main-content{margin-right:245px;min-height:100vh;padding:22px;}
+.hamburger{display:none;position:fixed;top:14px;left:14px;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 13px;cursor:pointer;}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:90;}
+@media(max-width:768px){
+  .hamburger{display:block;}
+  .sidebar{transform:translateX(100%);width:82vw;}
+  .sidebar.open{transform:translateX(0);}
+  .overlay.show{display:block;}
+  .main-content{margin-right:0;padding:10px;padding-top:58px;}
+  .stats-grid{grid-template-columns:repeat(2,1fr);}
+  .pos-layout{grid-template-columns:1fr!important;}
+}
+.page{display:none;}.page.active{display:block;}
+.page-header{display:flex;justify-content:space-between;margin-bottom:20px;}
+.page-title{font-size:1.5rem;font-weight:700;}
+.page-title span{color:var(--accent);}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;position:relative;}
+.stat-value{font-size:1.4rem;font-weight:700;}
+.stat-label{color:var(--text2);font-size:0.82rem;}
+.table-container{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:20px;}
+.table-header{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;}
+.data-table{width:100%;border-collapse:collapse;}
+.data-table th{background:var(--surface2);padding:11px 14px;text-align:right;font-size:0.78rem;}
+.data-table td{padding:11px 14px;border-top:1px solid rgba(30,58,95,.5);}
+.btn{padding:8px 16px;border-radius:8px;border:none;font-family:'Cairo',sans-serif;font-size:0.82rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;}
+.btn-accent{background:var(--accent);color:#fff;}
+.btn-outline{background:transparent;color:var(--accent);border:1px solid var(--accent);}
+.btn-danger{background:rgba(255,82,82,.15);color:var(--red);border:1px solid rgba(255,82,82,.3);}
+.btn-green{background:var(--green);color:#fff;}
+.btn-sm{padding:5px 11px;font-size:0.75rem;}
+.search-input{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 13px;width:190px;}
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:0.72rem;font-weight:700;}
+.badge-green{background:rgba(0,230,118,.15);color:var(--green);}
+.badge-red{background:rgba(255,82,82,.15);color:var(--red);}
+.badge-yellow{background:rgba(255,215,64,.15);color:var(--yellow);}
+.badge-blue{background:rgba(0,212,255,.15);color:var(--accent);}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center;padding:16px;}
+.modal-overlay.show{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px;width:100%;max-width:600px;max-height:92vh;overflow-y:auto;}
+.modal-title{font-size:1.05rem;font-weight:700;margin-bottom:20px;color:var(--accent);display:flex;justify-content:space-between;}
+.modal-close{background:none;border:none;color:var(--text2);font-size:1.2rem;cursor:pointer;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}
+.pos-layout{display:grid;grid-template-columns:1fr 360px;gap:16px;height:calc(100vh - 110px);}
+.pos-product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;padding:13px;overflow-y:auto;}
+.product-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:13px;cursor:pointer;text-align:center;}
+.product-card:hover{border-color:var(--accent);}
+.product-card .p-name{font-weight:700;}
+.product-card .p-price{color:var(--accent);font-weight:700;}
+.pos-cart{background:var(--surface);border:1px solid var(--border);border-radius:14px;display:flex;flex-direction:column;overflow:hidden;}
+.cart-items{flex:1;overflow-y:auto;padding:10px;}
+.cart-item{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px;margin-bottom:7px;}
+.cart-item-name{font-weight:600;}
+.qty-controls{display:flex;align-items:center;gap:6px;margin-top:5px;}
+.qty-btn{width:26px;height:26px;background:var(--border);border:none;border-radius:5px;cursor:pointer;}
+.cart-remove{background:none;border:none;color:var(--red);cursor:pointer;}
+.cart-footer{padding:13px;border-top:1px solid var(--border);}
+.payment-tabs{display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;}
+.payment-tab{flex:1;padding:7px 4px;border:1px solid var(--border);border-radius:7px;background:var(--surface);text-align:center;cursor:pointer;}
+.payment-tab.active{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.08);}
+.serial-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px;}
+.serial-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
+.serial-stats{display:flex;gap:16px;font-size:0.85rem;}
+.serial-bulk-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px;font-family:monospace;resize:vertical;}
+.serial-list{max-height:200px;overflow-y:auto;background:var(--surface2);border-radius:9px;padding:8px;margin-top:8px;}
+.serial-item{display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:2px 10px;margin:3px;font-family:monospace;}
+.serial-item.sold{background:rgba(255,82,82,0.15);border-color:var(--red);text-decoration:line-through;color:var(--red);}
+.movement-item{border-right:3px solid;padding:8px;margin-bottom:8px;background:var(--surface2);border-radius:8px;}
+.toast{position:fixed;bottom:22px;left:22px;background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:13px 18px;z-index:1000;transform:translateY(100px);opacity:0;transition:all .3s;}
+.toast.show{transform:translateY(0);opacity:1;}
+</style>
+</head>
+<body>
+<div id="loginScreen"><div class="login-box"><div class="login-logo">⚡ CairoTech</div><div class="login-sub">نظام الإدارة الاحترافي v6</div><div class="form-group"><label>اسم المستخدم</label><input type="text" id="loginUser" placeholder="username"></div><div class="form-group"><label>كلمة المرور</label><input type="password" id="loginPass" placeholder="password"></div><button class="btn-primary" onclick="doLogin()">🔐 تسجيل الدخول</button><div id="loginError">❌ بيانات الدخول غلط</div></div></div>
+<div id="app">
+  <button class="hamburger" onclick="toggleSidebar()">☰</button><div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+  <nav class="sidebar" id="sidebar"><div class="sidebar-logo">⚡ CairoTech</div>
+    <div class="nav-menu">
+      <div class="nav-section"><div class="nav-section-title">الرئيسية</div><div class="nav-item" data-page="dashboard"><span class="icon">📊</span> لوحة التحكم</div><div class="nav-item" data-page="daily"><span class="icon">📅</span> التقرير اليومي</div><div class="nav-item" data-page="serialsearch"><span class="icon">🔍</span> بحث بالسيريال</div></div>
+      <div class="nav-section"><div class="nav-section-title">المبيعات</div><div class="nav-item" data-page="pos"><span class="icon">🛒</span> نقطة البيع</div><div class="nav-item" data-page="invoices"><span class="icon">🧾</span> أرشيف الفواتير</div><div class="nav-item" data-page="installments"><span class="icon">📆</span> التقسيط</div><div class="nav-item" data-page="returns"><span class="icon">↩️</span> المرتجعات</div><div class="nav-item" data-page="warranty"><span class="icon">🛡️</span> الضمان</div></div>
+      <div class="nav-section"><div class="nav-section-title">المخزون</div><div class="nav-item" data-page="products"><span class="icon">📦</span> المنتجات</div><div class="nav-item" data-page="stockmovement"><span class="icon">🔄</span> حركة المخزون</div><div class="nav-item" data-page="purchases"><span class="icon">🛍️</span> فواتير المشتريات</div><div class="nav-item" data-page="suppliers"><span class="icon">🏭</span> الموردين</div></div>
+      <div class="nav-section"><div class="nav-section-title">المالية</div><div class="nav-item" data-page="financial"><span class="icon">💎</span> الميزانية</div><div class="nav-item" data-page="treasury"><span class="icon">🏦</span> الخزنة</div><div class="nav-item" data-page="expenses"><span class="icon">💸</span> المصروفات</div><div class="nav-item" data-page="reports"><span class="icon">📈</span> التقارير</div></div>
+      <div class="nav-section"><div class="nav-section-title">الإدارة</div><div class="nav-item" data-page="employees"><span class="icon">👨‍💼</span> الموظفين</div><div class="nav-item" data-page="customers"><span class="icon">👥</span> العملاء</div><div class="nav-item" data-page="maintenance"><span class="icon">🔧</span> الصيانة</div><div class="nav-item" data-page="users"><span class="icon">👤</span> المستخدمين</div><div class="nav-item" data-page="backup"><span class="icon">💾</span> النسخ الاحتياطي</div></div>
+    </div>
+    <div class="sidebar-footer"><div class="user-badge"><div class="avatar" id="userAvatar">A</div><div><div id="userName" style="font-weight:700">Admin</div><div id="userRole" style="color:var(--text2);font-size:0.75rem">Manager</div></div></div><button class="btn-logout" onclick="doLogout()">🚪 خروج</button></div>
+  </nav>
+  <main class="main-content">
+    <!-- Dashboard (مختصر) -->
+    <div class="page" id="page-dashboard"><div class="page-header"><div class="page-title">لوحة <span>التحكم</span></div><div id="dashDate"></div></div><div class="stats-grid"><div class="stat-card blue"><div class="stat-value" id="ds-sales">0</div><div class="stat-label">مبيعات اليوم</div></div></div></div>
+    <!-- POS -->
+    <div class="page" id="page-pos">
+      <div class="page-header"><div class="page-title">🛒 نقطة <span>البيع</span></div></div>
+      <div class="pos-layout">
+        <div class="pos-items"><div class="pos-header"><input class="pos-search" id="posSearch" type="text" placeholder="🔍 ابحث بالاسم..." oninput="renderPOSProducts()"></div><div class="pos-product-grid" id="posProductGrid"></div></div>
+        <div class="pos-cart"><div class="cart-header"><span>🧾 الفاتورة</span><span id="cartInvNum"></span></div><div class="cart-items" id="cartItems"></div><div class="cart-footer"><div class="cart-total-row"><span>الأصناف</span><span id="cartCount">0</span></div><div class="discount-row"><input class="discount-input" id="discountInput" type="number" placeholder="خصم EGP" oninput="updateCartTotals()"><select id="cartCustomerSelect" onchange="onCartCustomerSelect()"><option value="">— اختر عميل —</option></select></div><div class="discount-row"><input id="cartCustomer" placeholder="اسم العميل"><input id="cartCustomerPhone" placeholder="تليفون"></div><div class="cart-total-row"><span>الخصم</span><span id="cartDiscount">0</span></div><div class="cart-grand-total"><span>الإجمالي</span><span id="cartTotal">0</span></div><div class="payment-tabs"><div class="payment-tab active" data-pay="cash" onclick="selectPayment(this)">💵 كاش</div><div class="payment-tab" data-pay="ajel" onclick="selectPayment(this)">📋 آجل</div><div class="payment-tab" data-pay="instapay" onclick="selectPayment(this)">📲 InstaPay</div></div><div id="ajelFields" style="display:none"><input class="discount-input" id="ajelPartialPay" placeholder="دفعة مقدمة"></div><button class="btn btn-green" style="width:100%" onclick="completeSale()">✅ إتمام البيع</button><button class="btn btn-danger btn-sm" style="width:100%" onclick="clearCart()">🗑️ مسح</button></div></div>
+      </div>
+    </div>
+    <!-- المنتجات + كرت السيريالات -->
+    <div class="page" id="page-products">
+      <div class="page-header"><div class="page-title">📦 <span>المنتجات</span></div><div class="table-actions"><input class="search-input" id="prodSearch" placeholder="بحث..." oninput="renderProductsTable(this.value)"><button class="btn btn-accent btn-sm" onclick="openProductModal()">➕ منتج</button></div></div>
+      <div class="table-container"><div class="overflow-x"><table class="data-table"><thead><tr><th>كود</th><th>الاسم</th><th>سعر البيع</th><th>متاح من السيريالات</th><th>إجراءات</th></tr></thead><tbody id="productsTbody"></tbody></table></div></div>
+      <div id="serialManagerCard" class="serial-card hidden"><div class="serial-header"><h3 id="serialManagerTitle"></h3><div class="serial-stats" id="serialStats"></div></div><div class="grid-2"><div><label>➕ إضافة سيريالات (سطر لكل سيريال)</label><textarea id="bulkSerials" rows="4" class="serial-bulk-input" placeholder="SN-001&#10;SN-002"></textarea><div class="flex" style="gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm" onclick="addBulkSerials()">إضافة</button><button class="btn btn-outline btn-sm" onclick="downloadSerialTemplate()">📥 قالب CSV</button><input type="file" id="csvUpload" accept=".csv" style="display:none" onchange="importCSVSerials(this)"><button class="btn btn-outline btn-sm" onclick="document.getElementById('csvUpload').click()">📂 رفع CSV</button></div></div><div><label>🔢 قائمة السيريالات</label><div id="serialsList" class="serial-list"></div></div></div></div>
+    </div>
+    <!-- فواتير المشتريات مع إدخال سيريالات -->
+    <div class="page" id="page-purchases">
+      <div class="page-header"><div class="page-title">🛍️ فواتير <span>المشتريات</span></div><button class="btn btn-accent btn-sm" onclick="openPurchaseModal()">➕ فاتورة شراء</button></div>
+      <div class="table-container"><div class="overflow-x"><table class="data-table"><thead><tr><th>#</th><th>التاريخ</th><th>المورد</th><th>الأصناف</th><th>الإجمالي</th></tr></thead><tbody id="purchasesTbody"></tbody></table></div></div>
+    </div>
+    <!-- المرتجعات -->
+    <div class="page" id="page-returns">
+      <div class="page-header"><div class="page-title">↩️ <span>المرتجعات</span></div><button class="btn btn-accent btn-sm" onclick="openReturnModal()">➕ تسجيل مرتجع</button></div>
+      <div class="table-container"><div class="overflow-x"><table class="data-table"><thead><tr><th>#</th><th>التاريخ</th><th>الفاتورة الأصلية</th><th>العميل</th><th>السيريالات</th><th>السبب</th></tr></thead><tbody id="returnsTbody"></tbody></table></div></div>
+    </div>
+    <!-- بحث بالسيريال -->
+    <div class="page" id="page-serialsearch">
+      <div class="page-header"><div class="page-title">🔍 بحث بـ<span>السيريال نمبر</span></div></div>
+      <div class="table-container"><div class="table-header"><div class="table-title">🔢 بحث متقدم مع سجل الحركات</div></div><div style="padding:18px"><div class="flex" style="gap:10px;margin-bottom:16px"><input class="search-input" id="serialSearchInput" type="text" placeholder="أدخل السيريال نمبر..." style="flex:1"><button class="btn btn-accent" onclick="searchSerial()">🔍 بحث</button><button class="btn btn-outline" onclick="openAddSerialToProduct()">➕ إضافة سيريال جديد</button></div><div id="serialMovementResult"></div></div></div>
+    </div>
+    <!-- باقي الصفحات مختصرة -->
+    <div class="page" id="page-invoices"></div><div class="page" id="page-installments"></div><div class="page" id="page-warranty"></div><div class="page" id="page-stockmovement"></div><div class="page" id="page-suppliers"></div><div class="page" id="page-treasury"></div><div class="page" id="page-expenses"></div><div class="page" id="page-reports"></div><div class="page" id="page-daily"></div><div class="page" id="page-customers"></div><div class="page" id="page-maintenance"></div><div class="page" id="page-employees"></div><div class="page" id="page-financial"></div><div class="page" id="page-users"></div><div class="page" id="page-backup"></div>
+  </main>
+</div>
+<!-- مودالات -->
+<div class="modal-overlay" id="productModal"><div class="modal"><div class="modal-title"><span id="productModalTitle">➕ منتج جديد</span><button class="modal-close" onclick="closeModal('productModal')">✕</button></div><div class="form-group"><label>كود المنتج</label><input id="pId"></div><div class="form-group"><label>الاسم</label><input id="pName"></div><div class="form-group"><label>سعر البيع</label><input id="pSell" type="number"></div><div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('productModal')">إلغاء</button><button class="btn btn-accent" onclick="saveProduct()">حفظ</button></div></div></div>
+<div class="modal-overlay" id="purchaseModal"><div class="modal modal-lg"><div class="modal-title"><span>🛍️ فاتورة شراء جديدة</span><button class="modal-close" onclick="closeModal('purchaseModal')">✕</button></div><div class="grid-2"><div class="form-group"><label>المورد</label><input id="purSupplier"></div><div class="form-group"><label>التاريخ</label><input id="purDate" type="date"></div></div><div id="purchaseItemsContainer"></div><button class="btn btn-outline btn-sm" onclick="addPurchaseItem()">+ إضافة صنف</button><div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('purchaseModal')">إلغاء</button><button class="btn btn-accent" onclick="savePurchaseInvoice()">حفظ الفاتورة</button></div></div></div>
+<div class="modal-overlay" id="returnModal"><div class="modal"><div class="modal-title"><span>↩️ تسجيل مرتجع</span><button class="modal-close" onclick="closeModal('returnModal')">✕</button></div><div class="grid-2"><div class="form-group"><label>رقم الفاتورة الأصلية</label><input id="retInvoiceId" type="number"></div><div class="form-group"><label>العميل</label><input id="retCustomer"></div></div><div class="form-group"><label>المنتج</label><select id="retProductSelect" onchange="loadSoldSerialsForReturn()"><option value="">اختر منتج</option></select></div><div class="form-group"><label>اختر السيريالات المراد استرجاعها</label><div id="returnSerialsList" class="serial-list"></div></div><div class="form-group"><label>السبب</label><textarea id="retReason" rows="2"></textarea></div><div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('returnModal')">إلغاء</button><button class="btn btn-accent" onclick="saveReturn()">تسجيل</button></div></div></div>
+<div class="modal-overlay" id="addSerialModal"><div class="modal"><div class="modal-title"><span>➕ إضافة سيريال لمنتج</span><button class="modal-close" onclick="closeModal('addSerialModal')">✕</button></div><div class="form-group"><label>المنتج</label><select id="addSerialProductSelect"></select></div><div class="form-group"><label>السيريال</label><input id="newSerialValue" placeholder="مثال: SN-12345"></div><div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('addSerialModal')">إلغاء</button><button class="btn btn-accent" onclick="addSingleSerial()">إضافة</button></div></div></div>
+<div id="tempSerialModal" class="modal-overlay"><div class="modal"><div class="modal-title">🔢 اختيار السيريالات<button class="modal-close" onclick="closeModal('tempSerialModal')">✕</button></div><div id="tempSerialContent"></div></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ========== قاعدة البيانات ==========
+let DB = {
+  products: [],
+  serials: [],           // {id, productId, serial, status, addedAt, soldAt, purchaseInvoiceId, saleInvoiceId, returnInvoiceId}
+  serialMovements: [],   // {serial, action, date, invoiceId, productId, productName, details}
+  purchaseInvoices: [],
+  saleInvoices: [],
+  returnInvoices: [],
+  users: [],
+  customers: [],
+  suppliers: [],
+  cashflow: [],
+  nextInvoiceId: 1,
+  nextPurchaseId: 1,
+  nextReturnId: 1
+};
+
+function loadDB() {
+  const data = localStorage.getItem('cairo_db_v2');
+  if (data) {
+    const parsed = JSON.parse(data);
+    Object.assign(DB, parsed);
+  }
+  if (!DB.serials) DB.serials = [];
+  if (!DB.serialMovements) DB.serialMovements = [];
+  if (!DB.products) DB.products = [];
+  if (!DB.purchaseInvoices) DB.purchaseInvoices = [];
+  if (!DB.saleInvoices) DB.saleInvoices = [];
+  if (!DB.returnInvoices) DB.returnInvoices = [];
+  if (!DB.users.length) DB.users = [{username:'7rby', password:'0101', role:'Manager'}];
+}
+function saveDB() { localStorage.setItem('cairo_db_v2', JSON.stringify(DB)); }
+
+// ========== مساعدات السيريالات ==========
+function getAvailableSerials(productId) { return DB.serials.filter(s => s.productId == productId && s.status === 'available'); }
+function getSoldSerials(productId) { return DB.serials.filter(s => s.productId == productId && s.status === 'sold'); }
+function addSerialMovement(serial, action, invoiceId, productId, productName, details) {
+  DB.serialMovements.push({ serial, action, date: new Date().toISOString(), invoiceId, productId, productName, details });
+  saveDB();
+}
+
+// ========== المنتجات ==========
+function renderProductsTable(q='') {
+  const prods = DB.products.filter(p => !q || p.name.includes(q) || p.id.includes(q));
+  const tbody = document.getElementById('productsTbody');
+  tbody.innerHTML = prods.map(p => `<tr><td>${p.id}</td><td>${p.name}</td><td>${p.sellPrice} EGP</td><td>${getAvailableSerials(p.id).length}</td><td><button class="btn btn-purple btn-sm" onclick="showSerialManager('${p.id}')">🔢 سيريالات</button> <button class="btn btn-outline btn-sm" onclick="editProductPrompt('${p.id}')">✏️</button></td></tr>`).join('');
+}
+function showSerialManager(pid) {
+  const prod = DB.products.find(p => p.id == pid);
+  document.getElementById('serialManagerTitle').innerText = `إدارة سيريالات: ${prod.name}`;
+  document.getElementById('serialStats').innerHTML = `<span>📦 إجمالي: ${DB.serials.filter(s=>s.productId==pid).length}</span><span>✅ متاح: ${getAvailableSerials(pid).length}</span><span>❌ مباع: ${getSoldSerials(pid).length}</span>`;
+  window.currentProductId = pid;
+  refreshSerialList(pid);
+  document.getElementById('serialManagerCard').classList.remove('hidden');
+}
+function refreshSerialList(pid) {
+  const serials = DB.serials.filter(s => s.productId == pid);
+  const container = document.getElementById('serialsList');
+  container.innerHTML = serials.map(s => `<span class="serial-item ${s.status === 'sold' ? 'sold' : ''}" title="${s.status === 'sold' ? 'مباع' : 'متاح'}">${s.serial}</span>`).join('') || 'لا توجد سيريالات';
+}
+function addBulkSerials() {
+  const text = document.getElementById('bulkSerials').value;
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  let added = 0;
+  for (let serial of lines) {
+    serial = serial.trim();
+    if (!DB.serials.find(s => s.serial === serial && s.productId == window.currentProductId)) {
+      DB.serials.push({ id: Date.now()+Math.random(), productId: window.currentProductId, serial, status: 'available', addedAt: new Date().toISOString() });
+      addSerialMovement(serial, 'إضافة يدوية', null, window.currentProductId, DB.products.find(p=>p.id==window.currentProductId).name, 'إضافة من كرت الإدارة');
+      added++;
+    }
+  }
+  if (added) saveDB();
+  refreshSerialList(window.currentProductId);
+  showToast(`تمت إضافة ${added} سيريال`);
+  document.getElementById('bulkSerials').value = '';
+}
+function downloadSerialTemplate() { const blob=new Blob(["serial\nSN-001\nSN-002"],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='serials_template.csv'; a.click(); }
+function importCSVSerials(input) {
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const lines=e.target.result.split(/\r?\n/).slice(1).map(l=>l.split(',')[0].trim()).filter(l=>l);
+    let added=0;
+    for(let serial of lines){
+      if(!DB.serials.find(s=>s.serial===serial && s.productId==window.currentProductId)){
+        DB.serials.push({ id:Date.now()+Math.random(), productId:window.currentProductId, serial, status:'available', addedAt:new Date().toISOString() });
+        added++;
+      }
+    }
+    if(added) saveDB();
+    refreshSerialList(window.currentProductId);
+    showToast(`تمت إضافة ${added} سيريال من CSV`);
+  };
+  reader.readAsText(file,'UTF-8');
+  input.value='';
+}
+function openProductModal() { document.getElementById('pId').value=''; document.getElementById('pName').value=''; document.getElementById('pSell').value=''; openModal('productModal'); }
+function saveProduct() {
+  const id=document.getElementById('pId').value.trim();
+  const name=document.getElementById('pName').value.trim();
+  const sell=parseFloat(document.getElementById('pSell').value);
+  if(!id||!name) return;
+  DB.products.push({ id, name, sellPrice:sell, buyPrice:0 });
+  saveDB();
+  closeModal('productModal');
+  renderProductsTable();
+  refreshProductSelects();
+}
+function editProductPrompt(pid){
+  const p=DB.products.find(p=>p.id==pid);
+  const newName=prompt('الاسم الجديد',p.name); if(newName) p.name=newName;
+  const newSell=prompt('سعر البيع الجديد',p.sellPrice); if(newSell) p.sellPrice=parseFloat(newSell);
+  saveDB(); renderProductsTable();
+}
+function refreshProductSelects(){
+  const options=DB.products.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  document.querySelectorAll('.purchaseProductSelect').forEach(sel=>{ sel.innerHTML='<option value="">اختر منتج</option>'+options; });
+  const retSel=document.getElementById('retProductSelect'); if(retSel) retSel.innerHTML='<option value="">اختر منتج</option>'+options;
+  const addSel=document.getElementById('addSerialProductSelect'); if(addSel) addSel.innerHTML=options;
+}
+
+// ========== فاتورة الشراء (إدخال سيريالات متعددة) ==========
+function openPurchaseModal(){
+  document.getElementById('purSupplier').value='';
+  document.getElementById('purDate').valueAsDate=new Date();
+  document.getElementById('purchaseItemsContainer').innerHTML='';
+  addPurchaseItem();
+  openModal('purchaseModal');
+}
+function addPurchaseItem(){
+  const container=document.getElementById('purchaseItemsContainer');
+  const div=document.createElement('div');
+  div.className='purchase-item card';
+  div.style.marginBottom='12px';
+  div.innerHTML=`<div class="grid-2"><div class="form-group"><label>المنتج</label><select class="purchaseProductSelect" onchange="updatePurchaseProductInfo(this)"><option value="">اختر منتج</option></select></div><div class="form-group"><label>سعر الشراء (EGP)</label><input type="number" class="purchaseCost" placeholder="سعر الوحدة"></div></div><div class="form-group"><label>السيريالات (سطر لكل سيريال)</label><textarea class="purchaseSerials" rows="3" placeholder="SN-001&#10;SN-002"></textarea></div><button class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">حذف الصنف</button>`;
+  container.appendChild(div);
+  refreshProductSelects();
+}
+function updatePurchaseProductInfo(select){}
+function savePurchaseInvoice(){
+  const supplier=document.getElementById('purSupplier').value;
+  const date=document.getElementById('purDate').value;
+  const items=[];
+  document.querySelectorAll('.purchase-item').forEach(item=>{
+    const productId=item.querySelector('.purchaseProductSelect').value;
+    const cost=parseFloat(item.querySelector('.purchaseCost').value);
+    const serialsText=item.querySelector('.purchaseSerials').value;
+    const serials=serialsText.split(/\r?\n/).filter(l=>l.trim().length>0);
+    if(productId && serials.length) items.push({productId, cost, serials});
+  });
+  if(!items.length){ alert('أضف صنف واحد على الأقل مع سيريالات'); return; }
+  const invoiceId=DB.nextPurchaseId++;
+  for(let item of items){
+    const prod=DB.products.find(p=>p.id==item.productId);
+    if(!prod) continue;
+    for(let serial of item.serials){
+      if(!DB.serials.find(s=>s.serial===serial && s.productId==item.productId)){
+        DB.serials.push({ id:Date.now()+Math.random(), productId:item.productId, serial, status:'available', addedAt:new Date().toISOString(), purchaseInvoiceId:invoiceId });
+        addSerialMovement(serial, 'شراء', invoiceId, item.productId, prod.name, `فاتورة شراء #${invoiceId} بسعر ${item.cost} EGP`);
+      }
+    }
+  }
+  DB.purchaseInvoices.push({ id:invoiceId, supplier, date, items, total:0 });
+  saveDB();
+  alert(`تم حفظ فاتورة الشراء #${invoiceId}`);
+  closeModal('purchaseModal');
+  renderPurchasesTable();
+  renderProductsTable();
+}
+function renderPurchasesTable(){
+  const tbody=document.getElementById('purchasesTbody');
+  tbody.innerHTML=DB.purchaseInvoices.map(inv=>`<tr><td>#${inv.id}</td><td>${inv.date}</td><td>${inv.supplier}</td><td>${inv.items.length} صنف</td><td>-</td></tr>`).join('');
+}
+
+// ========== نقطة البيع مع اختيار سيريالات ==========
+let currentCart=[];
+function renderPOSProducts(){
+  const q=document.getElementById('posSearch')?.value.toLowerCase()||'';
+  const prods=DB.products.filter(p=>p.name.toLowerCase().includes(q));
+  const grid=document.getElementById('posProductGrid');
+  grid.innerHTML=prods.map(p=>`<div class="product-card" onclick="startAddToCart('${p.id}')"><div class="p-name">${p.name}</div><div class="p-price">${p.sellPrice} EGP</div><div class="p-stock">🔢 متاح: ${getAvailableSerials(p.id).length}</div></div>`).join('');
+}
+let tempProductForCart=null;
+function startAddToCart(pid){
+  const prod=DB.products.find(p=>p.id==pid);
+  const available=getAvailableSerials(pid);
+  if(!available.length){ alert('لا توجد سيريالات متاحة'); return; }
+  tempProductForCart=prod;
+  let html=`<h4>اختر السيريالات لمنتج ${prod.name}</h4><div class="serial-list">`;
+  available.forEach(s=>{ html+=`<label style="display:block"><input type="checkbox" class="cartSerialCheckbox" value="${s.serial}"> ${s.serial}</label>`; });
+  html+=`</div><div class="modal-footer"><button class="btn btn-success" onclick="confirmAddToCart()">إضافة للفاتورة</button><button class="btn btn-outline" onclick="closeModal('tempSerialModal')">إلغاء</button></div>`;
+  document.getElementById('tempSerialContent').innerHTML=html;
+  openModal('tempSerialModal');
+}
+function confirmAddToCart(){
+  const selected=Array.from(document.querySelectorAll('#tempSerialModal .cartSerialCheckbox:checked')).map(cb=>cb.value);
+  if(!selected.length){ alert('اختر سيريال واحد على الأقل'); return; }
+  currentCart.push({ productId:tempProductForCart.id, name:tempProductForCart.name, price:tempProductForCart.sellPrice, serials:selected });
+  closeModal('tempSerialModal');
+  renderCart();
+}
+function renderCart(){
+  const container=document.getElementById('cartItems');
+  if(!currentCart.length){ container.innerHTML='<div class="empty-state">السلة فارغة</div>'; document.getElementById('cartCount').innerText='0'; document.getElementById('cartTotal').innerText='0 EGP'; return; }
+  let total=0;
+  container.innerHTML=currentCart.map((item,idx)=>{
+    total+=item.price*item.serials.length;
+    return `<div class="cart-item"><div class="cart-item-name">${item.name} x${item.serials.length}</div><div style="font-size:0.7rem">🔢 ${item.serials.join(', ')}</div><div class="qty-controls"><button class="qty-btn" onclick="changeCartQty(${idx},-1)">−</button><span>${item.serials.length}</span><button class="qty-btn" onclick="changeCartQty(${idx},1)">+</button></div><button class="cart-remove" onclick="removeCartItem(${idx})">✕</button></div>`;
+  }).join('');
+  document.getElementById('cartCount').innerText=currentCart.reduce((s,i)=>s+i.serials.length,0);
+  document.getElementById('cartTotal').innerText=total.toFixed(2)+' EGP';
+}
+function changeCartQty(idx,delta){ /* لتغيير الكمية يحتاج تعديل السيريالات - مبسط: لا نغير */
+  alert('لتغيير الكمية احذف الصنف وأضفه مرة أخرى');
+}
+function removeCartItem(idx){ currentCart.splice(idx,1); renderCart(); }
+function clearCart(){ currentCart=[]; renderCart(); }
+function updateCartTotals(){ renderCart(); }
+function onCartCustomerSelect(){}
+function selectPayment(el){
+  document.querySelectorAll('.payment-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  window.selectedPayment=el.dataset.pay;
+  document.getElementById('ajelFields').style.display=window.selectedPayment==='ajel'?'block':'none';
+}
+function completeSale(){
+  if(!currentCart.length){ alert('السلة فارغة'); return; }
+  const customer=document.getElementById('cartCustomer').value;
+  const payment=window.selectedPayment||'cash';
+  let total=0;
+  for(let item of currentCart) total+=item.price*item.serials.length;
+  const invoiceId=DB.nextInvoiceId++;
+  for(let item of currentCart){
+    for(let serial of item.serials){
+      const sObj=DB.serials.find(s=>s.serial===serial && s.productId===item.productId);
+      if(sObj && sObj.status==='available'){
+        sObj.status='sold';
+        sObj.soldAt=new Date().toISOString();
+        sObj.saleInvoiceId=invoiceId;
+        addSerialMovement(serial, 'بيع', invoiceId, item.productId, item.name, `فاتورة بيع #${invoiceId} للعميل ${customer}`);
+      }
+    }
+  }
+  DB.saleInvoices.push({ id:invoiceId, customer, payment, date:new Date().toISOString(), items:currentCart, total });
+  DB.cashflow.push({ date:new Date().toISOString(), type:'in', method:payment, amount:total, desc:`فاتورة #${invoiceId}` });
+  saveDB();
+  alert(`تم البيع - فاتورة رقم #${invoiceId}`);
+  clearCart();
+  renderPOSProducts();
+  renderProductsTable();
+  renderInvoices();
+}
+function renderInvoices(){
+  const container=document.getElementById('page-invoices');
+  if(container) container.innerHTML=`<div class="table-container"><div class="table-header">الفواتير</div><div class="overflow-x"><table class="data-table"><thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>الإجمالي</th></tr></thead><tbody>${DB.saleInvoices.map(inv=>`<tr><td>#${inv.id}</td><td>${new Date(inv.date).toLocaleDateString()}</td><td>${inv.customer}</td><td>${inv.total} EGP</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+
+// ========== المرتجعات (اختيار سيريالات مباعة) ==========
+function openReturnModal(){
+  refreshProductSelects();
+  document.getElementById('retInvoiceId').value='';
+  document.getElementById('retCustomer').value='';
+  document.getElementById('retReason').value='';
+  document.getElementById('returnSerialsList').innerHTML='';
+  openModal('returnModal');
+}
+function loadSoldSerialsForReturn(){
+  const productId=document.getElementById('retProductSelect').value;
+  if(!productId) return;
+  const sold=getSoldSerials(productId);
+  const container=document.getElementById('returnSerialsList');
+  container.innerHTML=sold.map(s=>`<label style="display:block"><input type="checkbox" class="returnSerialCheckbox" value="${s.serial}"> ${s.serial}</label>`).join('') || 'لا توجد سيريالات مباعة';
+}
+function saveReturn(){
+  const originalInvoiceId=parseInt(document.getElementById('retInvoiceId').value);
+  const customer=document.getElementById('retCustomer').value;
+  const productId=document.getElementById('retProductSelect').value;
+  const reason=document.getElementById('retReason').value;
+  const selected=Array.from(document.querySelectorAll('#returnSerialsList .returnSerialCheckbox:checked')).map(cb=>cb.value);
+  if(!selected.length){ alert('اختر سيريالات'); return; }
+  const returnId=DB.nextReturnId++;
+  for(let serial of selected){
+    const sObj=DB.serials.find(s=>s.serial===serial);
+    if(sObj){
+      sObj.status='available';
+      sObj.returnInvoiceId=returnId;
+      addSerialMovement(serial, 'مرتجع', returnId, productId, DB.products.find(p=>p.id==productId)?.name, `مرتجع من فاتورة #${originalInvoiceId} - ${reason}`);
+    }
+  }
+  DB.returnInvoices.push({ id:returnId, originalInvoiceId, customer, productId, serials:selected, reason, date:new Date().toISOString() });
+  saveDB();
+  alert(`تم تسجيل المرتجع #${returnId}`);
+  closeModal('returnModal');
+  renderReturnsTable();
+  renderProductsTable();
+}
+function renderReturnsTable(){
+  const tbody=document.getElementById('returnsTbody');
+  tbody.innerHTML=DB.returnInvoices.map(r=>`<tr><td>#${r.id}</td><td>${new Date(r.date).toLocaleDateString()}</td><td>${r.originalInvoiceId}</td><td>${r.customer}</td><td>${r.serials.join(', ')}</td><td>${r.reason}</td></tr>`).join('');
+}
+
+// ========== البحث بالسيريال + إضافة سيريال جديد ==========
+function searchSerial(){
+  const serial=document.getElementById('serialSearchInput').value.trim();
+  if(!serial) return;
+  const movements=DB.serialMovements.filter(m=>m.serial===serial).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const serialObj=DB.serials.find(s=>s.serial===serial);
+  let status=serialObj?(serialObj.status==='available'?'✅ متاح':'❌ مباع'):'غير موجود';
+  let html=`<div class="card"><strong>السيريال: ${serial}</strong> | الحالة: ${status}<br><h4>سجل الحركات:</h4>`;
+  if(!movements.length) html+='<p>لا توجد حركات</p>';
+  else movements.forEach(m=>{ html+=`<div class="movement-item" style="border-right-color:${m.action==='شراء'?'green':(m.action==='بيع'?'red':'orange')}"><span class="badge ${m.action==='شراء'?'badge-green':(m.action==='بيع'?'badge-red':'badge-blue')}">${m.action}</span> - ${new Date(m.date).toLocaleString()} - ${m.details}</div>`; });
+  html+=`<div class="modal-footer"><button class="btn btn-outline" onclick="openAddSerialToProductWithPrefill('${serial}')">➕ إضافة هذا السيريال لمنتج</button></div></div>`;
+  document.getElementById('serialMovementResult').innerHTML=html;
+}
+function openAddSerialToProductWithPrefill(serial){
+  document.getElementById('newSerialValue').value=serial;
+  openAddSerialToProduct();
+}
+function openAddSerialToProduct(){
+  refreshProductSelects();
+  openModal('addSerialModal');
+}
+function addSingleSerial(){
+  const productId=document.getElementById('addSerialProductSelect').value;
+  const serial=document.getElementById('newSerialValue').value.trim();
+  if(!productId||!serial){ alert('اختر منتج وأدخل السيريال'); return; }
+  if(DB.serials.find(s=>s.serial===serial)){ alert('السيريال موجود'); return; }
+  DB.serials.push({ id:Date.now()+Math.random(), productId, serial, status:'available', addedAt:new Date().toISOString() });
+  addSerialMovement(serial, 'إضافة يدوية', null, productId, DB.products.find(p=>p.id==productId).name, 'تمت الإضافة من صفحة البحث');
+  saveDB();
+  alert('تمت إضافة السيريال');
+  closeModal('addSerialModal');
+  renderProductsTable();
+}
+
+// ========== عام ==========
+function showToast(msg){ const t=document.getElementById('toast'); t.innerText=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
+function openModal(id){ document.getElementById(id).classList.add('show'); }
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); }
+let currentUser=null;
+function doLogin(){
+  const u=document.getElementById('loginUser').value;
+  const p=document.getElementById('loginPass').value;
+  const user=DB.users.find(x=>x.username===u && x.password===p);
+  if(!user){ document.getElementById('loginError').style.display='block'; return; }
+  currentUser=user;
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('userName').innerText=user.username;
+  document.getElementById('userRole').innerText=user.role;
+  showPage('dashboard');
+}
+function doLogout(){ localStorage.removeItem('cairo_db_v2'); location.reload(); }
+function showPage(pg){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const el=document.getElementById('page-'+pg);
+  if(el) el.classList.add('active');
+  if(pg==='products') renderProductsTable();
+  if(pg==='pos') renderPOSProducts();
+  if(pg==='purchases') renderPurchasesTable();
+  if(pg==='returns') renderReturnsTable();
+  if(pg==='invoices') renderInvoices();
+  if(pg==='serialsearch') document.getElementById('serialMovementResult').innerHTML='';
+}
+window.onload=()=>{ loadDB(); renderProductsTable(); refreshProductSelects(); renderPurchasesTable(); renderReturnsTable(); showPage('dashboard'); };
+</script>
+</body>
+</html>
