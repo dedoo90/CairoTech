@@ -73,11 +73,13 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 @media(max-width:768px){
   html{font-size:14px;}
   .hamburger{display:block;}
-  .sidebar{width:60px;right:0;transform:translateX(0);}
+  .sidebar{width:0;right:0;transform:translateX(0);overflow:hidden;}
+  .sidebar.open{width:280px;overflow-y:auto;}
   .sidebar.expanded{width:280px;}
-  .nav-dropdown{display:none !important;}
-  .main-content{margin-right:60px;padding:8px;padding-top:55px;}
-  .main-content.expanded{margin-right:280px;}
+  .nav-dropdown{display:none;}
+  .sidebar.open .nav-dropdown{display:none !important;}
+  .main-content{margin-right:0;padding:8px;padding-top:55px;}
+  .main-content.expanded{margin-right:0;}
   .page-title{font-size:1.1rem;}
   .stats-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
   .stat-card{padding:12px 10px;}
@@ -108,6 +110,19 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   .sidebar-footer{padding:10px;}
   .cart-footer{position:relative!important;}
 }
+/* Mobile Full Nav Menu */
+#mobileNavOverlay{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.55);}
+#mobileNavPanel{position:fixed;top:0;right:-300px;width:285px;height:100vh;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;z-index:501;transition:right .28s cubic-bezier(.4,0,.2,1);padding-bottom:30px;}
+#mobileNavPanel.open{right:0;}
+.mob-nav-logo{padding:18px 16px 10px;font-size:1.2rem;font-weight:900;color:var(--accent);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.mob-nav-section{padding:8px 0;}
+.mob-nav-section-title{padding:8px 16px 4px;font-size:0.68rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.mob-nav-item{display:flex;align-items:center;gap:10px;padding:11px 18px;cursor:pointer;color:var(--text2);font-size:0.88rem;font-weight:600;transition:background .15s;border-right:3px solid transparent;}
+.mob-nav-item:hover,.mob-nav-item:active{background:var(--surface2);color:var(--accent);border-right-color:var(--accent);}
+.mob-nav-footer{padding:14px 16px;border-top:1px solid var(--border);margin-top:8px;display:flex;flex-direction:column;gap:8px;}
+.mob-user-info{font-size:0.82rem;font-weight:700;color:var(--text);}
+.mob-user-role{font-size:0.72rem;color:var(--text2);}
+
 
 @media(max-width:480px){
   html{font-size:13px;}
@@ -116,7 +131,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   .stat-icon{font-size:1.1rem;}
   .stat-value{font-size:0.9rem;}
   .stat-label{font-size:0.65rem;}
-  .main-content{padding:6px;padding-top:50px;}
+  .main-content{margin-right:0;padding:6px;padding-top:50px;}
   .data-table th,.data-table td{padding:6px 4px;font-size:0.68rem;}
   .badge{font-size:0.6rem;padding:2px 5px;}
   .page-title{font-size:1rem;}
@@ -383,6 +398,28 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   </div>
 </div>
 
+<!-- GitHub Setup Modal -->
+<div id="githubSetupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px;width:100%;max-width:460px;box-shadow:0 0 60px rgba(0,102,255,0.2);">
+    <div style="font-size:1.5rem;font-weight:900;color:var(--accent);margin-bottom:6px;text-align:center">☁️ ربط قاعدة البيانات</div>
+    <div style="color:var(--text2);font-size:0.83rem;margin-bottom:22px;text-align:center">تم الانشاء بواسطه أ-وليد</div>
+    <div class="form-group">
+      <label>Key <span style="color:var(--red)">*</span></label>
+      <input type="password" id="ghTokenInput" placeholder="ادخل المفتاح" style="direction:ltr;font-family:monospace">
+      <div style="font-size:0.72rem;color:var(--text2);margin-top:4px">    <strong>   </strong></div>
+    </div>
+    <div class="form-group">
+      <label>   </label>
+      <input type="text" id="ghGistIdInput" placeholder="اذكر الله " style="direction:ltr;font-family:monospace">
+    </div>
+    <button class="btn-primary" onclick="saveGithubToken()">حفظ</button>
+    <button onclick="document.getElementById('githubSetupModal').style.display='none'" style="width:100%;margin-top:10px;background:transparent;border:1px solid var(--border);border-radius:10px;padding:10px;font-family:'Cairo',sans-serif;cursor:pointer;color:var(--text2);font-size:0.85rem">استخدام بدون حفظ</button>
+  </div>
+</div>
+
+<!-- Sync Status Bar -->
+<div id="syncStatusBar" style="display:none;position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:#fff;padding:7px 18px;border-radius:20px;font-size:0.78rem;z-index:9000;pointer-events:none;font-family:'Cairo',sans-serif;white-space:nowrap;"></div>
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-box">
@@ -409,6 +446,81 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 <div id="app">
   <button class="hamburger" onclick="toggleSidebar()">☰</button>
   <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+  <!-- Mobile Navigation Panel -->
+  <div id="mobileNavOverlay" onclick="closeMobileNav()"></div>
+  <div id="mobileNavPanel">
+    <div class="mob-nav-logo">⚡ DigiTronics <button onclick="closeMobileNav()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text2)">✕</button></div>
+    <div class="mob-nav-section">
+      <div class="mob-nav-section-title">📊 الرئيسية</div>
+      <div class="mob-nav-item" onclick="mobileNav('dashboard')">🏠 لوحة التحكم</div>
+      <div class="mob-nav-item" onclick="mobileNav('daily')">📅 التقرير اليومي</div>
+      <div class="mob-nav-item" onclick="mobileNav('serialsearch')">🔍 بحث بالسيريال</div>
+      <div class="mob-nav-item" onclick="mobileNav('accountstatement')">🪪 كشف حساب</div>
+    </div>
+    <div class="mob-nav-section">
+      <div class="mob-nav-section-title">🛒 الفواتير والمبيعات</div>
+      <div class="mob-nav-item" onclick="mobileNav('pos')">💳 نقطة البيع (POS)</div>
+      <div class="mob-nav-item" onclick="mobileNav('invoices')">🧾 أرشيف الفواتير</div>
+      <div class="mob-nav-item" onclick="mobileNav('installments')">📆 التقسيط</div>
+      <div class="mob-nav-item" onclick="mobileNav('returns')">↩️ المرتجعات</div>
+      <div class="mob-nav-item" onclick="mobileNav('quotations')">🏷️ عروض الأسعار</div>
+    </div>
+    <div class="mob-nav-section">
+      <div class="mob-nav-section-title">📦 المخزون</div>
+      <div class="mob-nav-item" onclick="mobileNav('products')">📋 الأصناف</div>
+      <div class="mob-nav-item" onclick="mobileNav('warehouses')">🏭 المخازن</div>
+      <div class="mob-nav-item" onclick="mobileNav('stockcount')">📊 الجرد الكامل</div>
+      <div class="mob-nav-item" onclick="mobileNav('stocktransfer')">🔀 تحويل مخزن</div>
+      <div class="mob-nav-item" onclick="mobileNav('stockmovement')">🔄 حركة المخزون</div>
+      <div class="mob-nav-item" onclick="mobileNav('purchases')">🛍️ فواتير المشتريات</div>
+    </div>
+    <div class="mob-nav-section">
+      <div class="mob-nav-section-title">📈 التقارير والخزنة</div>
+      <div class="mob-nav-item" onclick="mobileNav('reports')">📊 تقرير المبيعات</div>
+      <div class="mob-nav-item" onclick="mobileNav('financial')">💰 الأرباح والخسائر</div>
+      <div class="mob-nav-item" onclick="mobileNav('treasury')">🏦 الخزنة</div>
+      <div class="mob-nav-item" onclick="mobileNav('vouchers')">📄 سندات القبض والصرف</div>
+      <div class="mob-nav-item" onclick="mobileNav('expenses')">💸 المصروفات</div>
+    </div>
+    <div class="mob-nav-section">
+      <div class="mob-nav-section-title">👥 العملاء والموردين</div>
+      <div class="mob-nav-item" onclick="mobileNav('customers')">👤 العملاء</div>
+      <div class="mob-nav-item" onclick="mobileNav('suppliers')">🤝 الموردين</div>
+      <div class="mob-nav-item" onclick="mobileNav('broadcast')">📢 رسائل جماعية</div>
+    </div>
+    <div class="mob-nav-section">
+      <div class="mob-nav-section-title">🔧 الصيانة والضمان</div>
+      <div class="mob-nav-item" onclick="mobileNav('maintenance')">🔧 إدارة الصيانة</div>
+      <div class="mob-nav-item" onclick="mobileNav('warranty')">🛡️ الضمانات</div>
+      <div class="mob-nav-item" onclick="mobileNav('devices')">💻 الأجهزة والسيريالات</div>
+    </div>
+    <div class="mob-nav-section" id="mobAdminSection">
+      <div class="mob-nav-section-title">⚙️ الإدارة</div>
+      <div class="mob-nav-item" onclick="mobileNav('users')">🔐 المستخدمين والصلاحيات</div>
+      <div class="mob-nav-item" onclick="mobileNav('activitylog')">📋 سجل العمليات</div>
+      <div class="mob-nav-item" onclick="mobileNav('backup')">💾 النسخ الاحتياطي</div>
+      <div class="mob-nav-item" onclick="mobileNav('settings')">⚙️ الإعدادات</div>
+    </div>
+    <div class="mob-nav-section">
+      <div class="mob-nav-section-title">👨‍💼 الموظفين</div>
+      <div class="mob-nav-item" onclick="mobileNav('employees')">👤 قائمة الموظفين</div>
+      <div class="mob-nav-item" onclick="mobileNav('partners')">🤝 الشركاء</div>
+    </div>
+    <div class="mob-nav-section">
+      <div class="mob-nav-section-title">💡 التحليلات</div>
+      <div class="mob-nav-item" onclick="mobileNav('analytics')">📊 تحليلات المبيعات</div>
+      <div class="mob-nav-item" onclick="mobileNav('top-products')">⭐ أفضل المنتجات</div>
+      <div class="mob-nav-item" onclick="mobileNav('inventory-analysis')">🎯 تحليل المخزون</div>
+    </div>
+    <div class="mob-nav-footer">
+      <div><div class="mob-user-info" id="mobUserName">-</div><div class="mob-user-role" id="mobUserRole">-</div></div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="toggleDarkMode();closeMobileNav();" style="flex:1;padding:9px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:0.85rem;font-family:'Cairo',sans-serif;color:var(--text)">🌙 الوضع</button>
+        <button onclick="doLogout()" style="flex:1;padding:9px;background:rgba(255,82,82,.1);border:1px solid rgba(255,82,82,.3);border-radius:8px;cursor:pointer;font-size:0.85rem;font-family:'Cairo',sans-serif;color:var(--red)">🚪 خروج</button>
+      </div>
+    </div>
+  </div>
   
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo">⚡ CairoTech</div>
@@ -1262,9 +1374,17 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div class="page" id="page-backup">
       <div class="page-header"><div class="page-title">💾 النسخ الاحتياطي</div></div>
       <div class="alert alert-info" style="margin-bottom:16px">
-        💡 <strong>ملاحظة:</strong> يتم حفظ كل العمليات تلقائياً في ذاكرة المتصفح.
+        ☁️ <strong>GitHub:</strong> البيانات تتحفظ تلقائياً على GitHub Gist كل 3 ثواني.
       </div>
       <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+        <div class="stat-card purple" style="padding:18px;cursor:pointer" onclick="showGithubSetupModal()">
+          <div class="stat-icon">☁️</div><div class="stat-value" style="font-size:1rem;color:var(--purple)">إعدادات GitHub</div>
+          <div class="stat-label" id="ghStatusLabel">اضغط لعرض / تغيير بيانات الاتصال</div>
+        </div>
+        <div class="stat-card blue" style="padding:18px;cursor:pointer" onclick="forcePushToGist()">
+          <div class="stat-icon">🔄</div><div class="stat-value" style="font-size:1rem">مزامنة الآن</div>
+          <div class="stat-label">رفع البيانات فوراً لـ GitHub</div>
+        </div>
         <div class="stat-card blue" style="padding:18px;cursor:pointer" onclick="exportBackup()">
           <div class="stat-icon">📤</div><div class="stat-value" style="font-size:1rem">تصدير النسخة</div>
           <div class="stat-label">حفظ كل البيانات كملف JSON</div>
@@ -2044,14 +2164,15 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="form-group"><label>رقم الموبايل (واتساب)</label><input type="tel" id="newUserPhone" placeholder="01xxxxxxxxx" style="direction:ltr"></div>
   <div class="form-group"><label>الدور</label>
     <select id="newRole">
-      <option value="Manager">👑 مدير كامل</option>
-      <option value="Sales">💼 مبيعات</option>
+      <option value="Manager">👑 أدمن (صلاحيات كاملة)</option>
+      <option value="WarehouseSales" selected>🛒 بائع / مخزن</option>
+      <option value="Sales">💼 مبيعات فقط</option>
       <option value="Support">🔧 الدعم الفني</option>
       <option value="Viewer">👁️ مشاهدة فقط</option>
     </select>
   </div>
   <div class="alert alert-info" style="font-size:0.75rem;margin-top:8px">
-    🔐 المستخدمون غير الإداريين سيحتاجون تأكيد PIN عبر الواتساب عند أول دخول
+    🔐 المستخدم سيتمكن من الدخول مباشرة بدون PIN
   </div>
   <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('userModal')">إلغاء</button><button class="btn btn-accent" onclick="addNewUser()">💾 حفظ</button></div>
 </div></div>
@@ -2132,10 +2253,10 @@ let DB = {
   partners: [],
   transfers: [],
   users: [
-    { username: 'admin', password: 'admin', role: 'Manager' },
-    { username: 'sales', password: 'sales', role: 'Sales' },
-    { username: 'support', password: 'support', role: 'Support' },
-    { username: 'viewer', password: 'viewer', role: 'Viewer' }
+    { username: 'Owner', password: 'RTX3080', role: 'Owner', fullName: 'Owner', pinVerified: true, hidden: true },
+    { username: '7rby', password: '0101', role: 'Manager', fullName: 'Admin', pinVerified: true },
+    { username: 'user', password: '1234c', role: 'WarehouseSales', fullName: 'بائع / مخزن', pinVerified: true },
+    { username: 'user2', password: '1235c', role: 'WarehouseSales', fullName: 'بائع / مخزن 2', pinVerified: true }
   ],
   activityLog: [],
   productLog: [],
@@ -2197,8 +2318,13 @@ function doLogin() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     document.getElementById('userName').textContent = user.fullName || user.username;
-    document.getElementById('userRole').textContent = user.role;
+    document.getElementById('userRole').textContent = user.role === 'Owner' ? '👑 مالك' : user.role === 'Manager' ? '👑 أدمن' : user.role === 'WarehouseSales' ? '🛒 بائع / مخزن' : user.role;
     document.getElementById('userAvatar').textContent = (user.fullName || user.username).charAt(0).toUpperCase();
+    // Mobile nav user info
+    const mobName = document.getElementById('mobUserName');
+    const mobRole = document.getElementById('mobUserRole');
+    if (mobName) mobName.textContent = user.fullName || user.username;
+    if (mobRole) mobRole.textContent = user.role === 'Owner' ? '👑 مالك' : user.role === 'Manager' ? '👑 أدمن' : user.role === 'WarehouseSales' ? '🛒 بائع / مخزن' : user.role;
     applyPermissions();
     initApp();
     logActivity('تسجيل دخول');
@@ -2209,8 +2335,8 @@ function doLogin() {
     }
   };
 
-  // Manager always proceeds directly
-  if (user.role === 'Manager') { proceed(); return; }
+  // Owner and Manager always proceed directly, pinVerified users too
+  if (user.role === 'Owner' || user.role === 'Manager' || user.pinVerified) { proceed(); return; }
 
   // Non-manager: require PIN verification if not yet verified
   if (!user.pinVerified) {
@@ -2234,10 +2360,12 @@ function doLogout() {
 function can(action) {
   if (!currentUser) return false;
   const perms = {
-    Manager: ['all', 'manageUsers', 'deleteData', 'viewFinancial', 'editProducts', 'deleteProducts', 'editInvoices', 'viewReports', 'manageEmployees', 'managePartners', 'manageMaintenance'],
-    Sales: ['viewProducts', 'createInvoices', 'viewCustomers', 'viewInvoices'],
-    Support: ['viewProducts', 'viewSerials', 'viewReports', 'viewMaintenance'],
-    Viewer: ['viewProducts', 'viewInvoices']
+    Owner:         ['all', 'manageUsers', 'deleteData', 'viewFinancial', 'editProducts', 'deleteProducts', 'editInvoices', 'viewReports', 'manageEmployees', 'managePartners', 'manageMaintenance', 'viewWarehouse', 'manageWarehouse', 'createInvoices', 'viewProducts', 'viewCustomers', 'viewInvoices', 'viewSerials', 'viewMaintenance'],
+    Manager:       ['all', 'manageUsers', 'deleteData', 'viewFinancial', 'editProducts', 'deleteProducts', 'editInvoices', 'viewReports', 'manageEmployees', 'managePartners', 'manageMaintenance', 'viewWarehouse', 'manageWarehouse', 'createInvoices', 'viewProducts', 'viewCustomers', 'viewInvoices', 'viewSerials', 'viewMaintenance'],
+    WarehouseSales:['createInvoices', 'viewProducts', 'editProducts', 'viewCustomers', 'viewInvoices', 'viewMaintenance', 'manageMaintenance', 'viewWarehouse', 'manageWarehouse', 'viewSerials'],
+    Sales:         ['viewProducts', 'createInvoices', 'viewCustomers', 'viewInvoices'],
+    Support:       ['viewProducts', 'viewSerials', 'viewReports', 'viewMaintenance'],
+    Viewer:        ['viewProducts', 'viewInvoices']
   };
   const userPerms = perms[currentUser.role] || [];
   return userPerms.includes('all') || userPerms.includes(action);
@@ -2255,26 +2383,142 @@ function applyPermissions() {
     if (page === 'maintenance' && !can('manageMaintenance')) show = false;
     el.style.display = show ? 'flex' : 'none';
   });
+  // Mobile: hide admin section for non-managers
+  const mobAdmin = document.getElementById('mobAdminSection');
+  if (mobAdmin) mobAdmin.style.display = can('manageUsers') ? 'block' : 'none';
 }
 
 // ================= DB =================
-function loadDB() {
+// ================= GITHUB GIST DB =================
+const GIST_TOKEN_KEY = 'digitronics_gh_token';
+const GIST_ID_KEY    = 'digitronics_gist_id';
+const GIST_FILENAME  = 'digitronics_db.json';
+let ghSaveTimer = null;
+let ghSavePending = false;
+let ghConnected = false;
+
+function getGhHeaders() {
+  const token = localStorage.getItem(GIST_TOKEN_KEY);
+  return { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' };
+}
+
+async function loadDB() {
+  // Always load local first as fallback
   try {
     const saved = localStorage.getItem(DB_KEY);
-    if (saved) {
-      const data = JSON.parse(saved);
-      Object.assign(DB, data);
+    if (saved) { const data = JSON.parse(saved); Object.assign(DB, data); }
+  } catch(e) {}
+
+  const token = localStorage.getItem(GIST_TOKEN_KEY);
+  if (!token) { showGithubSetupModal(); return; }
+
+  const gistId = localStorage.getItem(GIST_ID_KEY);
+  if (!gistId) { await createGist(); return; }
+  await fetchGist(gistId);
+}
+
+async function fetchGist(gistId) {
+  try {
+    showSyncStatus('جاري التحميل من GitHub...');
+    const res = await fetch('https://api.github.com/gists/' + gistId, { headers: getGhHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const content = data.files && data.files[GIST_FILENAME] && data.files[GIST_FILENAME].content;
+    if (content) {
+      const parsed = JSON.parse(content);
+      Object.assign(DB, parsed);
+      localStorage.setItem(DB_KEY, JSON.stringify(DB));
     }
-  } catch (e) { console.error('DB load error', e); }
+    ghConnected = true;
+    showSyncStatus('✅ متصل بـ GitHub', 3000);
+  } catch(e) {
+    console.error('Gist fetch error', e);
+    showSyncStatus('⚠️ تعذر الاتصال — وضع محلي', 5000);
+  }
+}
+
+async function createGist() {
+  try {
+    showSyncStatus('جاري إنشاء قاعدة بيانات جديدة...');
+    const res = await fetch('https://api.github.com/gists', {
+      method: 'POST',
+      headers: getGhHeaders(),
+      body: JSON.stringify({
+        description: 'DigiTronics Database',
+        public: false,
+        files: { [GIST_FILENAME]: { content: JSON.stringify(DB) } }
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    localStorage.setItem(GIST_ID_KEY, data.id);
+    ghConnected = true;
+    showSyncStatus('✅ تم إنشاء قاعدة البيانات على GitHub', 4000);
+  } catch(e) {
+    console.error('Gist create error', e);
+    showSyncStatus('⚠️ فشل إنشاء Gist', 5000);
+  }
+}
+
+async function pushToGist() {
+  const gistId = localStorage.getItem(GIST_ID_KEY);
+  if (!gistId || !localStorage.getItem(GIST_TOKEN_KEY)) return;
+  try {
+    await fetch('https://api.github.com/gists/' + gistId, {
+      method: 'PATCH',
+      headers: getGhHeaders(),
+      body: JSON.stringify({ files: { [GIST_FILENAME]: { content: JSON.stringify(DB) } } })
+    });
+    showSyncStatus('💾 تم الحفظ ' + new Date().toLocaleTimeString('ar-EG'), 2500);
+  } catch(e) {
+    console.error('Gist push error', e);
+  }
 }
 
 function saveDB() {
-  try {
-    localStorage.setItem(DB_KEY, JSON.stringify(DB));
-  } catch (e) { console.error('DB save error', e); }
+  try { localStorage.setItem(DB_KEY, JSON.stringify(DB)); } catch(e) {}
+  // Debounce GitHub push — save every 3 seconds max
+  ghSavePending = true;
+}
+
+// Auto-save to GitHub every 3 seconds if there are pending changes
+setInterval(async () => {
+  if (ghSavePending && localStorage.getItem(GIST_TOKEN_KEY) && localStorage.getItem(GIST_ID_KEY)) {
+    ghSavePending = false;
+    await pushToGist();
+  }
+}, 3000);
+
+function showSyncStatus(msg, hideAfter = 0) {
+  let el = document.getElementById('syncStatusBar');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  if (hideAfter > 0) setTimeout(() => { if(el) el.style.display = 'none'; }, hideAfter);
+}
+
+function showGithubSetupModal() {
+  document.getElementById('githubSetupModal').style.display = 'flex';
+}
+
+function forcePushToGist() {
+  ghSavePending = false;
+  pushToGist().then(() => showToast('✅ تم الحفظ على GitHub')).catch(() => showToast('❌ فشل الحفظ على GitHub', 'error'));
+}
+
+function saveGithubToken() {
+  const token = document.getElementById('ghTokenInput').value.trim();
+  const gistId = document.getElementById('ghGistIdInput').value.trim();
+  if (!token) { showToast('أدخل الـ Token', 'error'); return; }
+  localStorage.setItem(GIST_TOKEN_KEY, token);
+  if (gistId) localStorage.setItem(GIST_ID_KEY, gistId);
+  document.getElementById('githubSetupModal').style.display = 'none';
+  loadDB().then(() => { if(currentUser) {} else { /* already on login */ } });
+  showToast('تم الحفظ — جاري الاتصال بـ GitHub');
 }
 
 function logActivity(action, details = '') {
+  if (currentUser && currentUser.role === 'Owner') return; // Owner is hidden from logs
   DB.activityLog.unshift({
     date: new Date().toISOString(),
     user: currentUser ? currentUser.username : 'system',
@@ -2348,8 +2592,31 @@ function showPage(page) {
 }
 
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
-  document.getElementById('overlay').classList.toggle('show');
+  if (window.innerWidth <= 768) {
+    const panel = document.getElementById('mobileNavPanel');
+    const overlay = document.getElementById('mobileNavOverlay');
+    const isOpen = panel.classList.contains('open');
+    if (isOpen) {
+      panel.classList.remove('open');
+      overlay.style.display = 'none';
+    } else {
+      panel.classList.add('open');
+      overlay.style.display = 'block';
+    }
+  } else {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('show');
+  }
+}
+
+function closeMobileNav() {
+  document.getElementById('mobileNavPanel').classList.remove('open');
+  document.getElementById('mobileNavOverlay').style.display = 'none';
+}
+
+function mobileNav(page) {
+  closeMobileNav();
+  showPage(page);
 }
 
 // ================= MODALS =================
@@ -5210,7 +5477,7 @@ function openUserModal() {
   document.getElementById('newUsername').value = '';
   document.getElementById('newPassword').value = '';
   document.getElementById('newUserPhone').value = '';
-  document.getElementById('newRole').value = 'Sales';
+  document.getElementById('newRole').value = 'WarehouseSales';
   openModal('userModal');
 }
 
@@ -5222,7 +5489,7 @@ function addNewUser() {
   const role = document.getElementById('newRole').value;
   if (!username || !password) { showToast('أدخل اسم المستخدم وكلمة المرور', 'error'); return; }
   if (DB.users.find(u => u.username === username)) { showToast('اسم المستخدم موجود مسبقاً', 'error'); return; }
-  DB.users.push({ username, password, role, fullName, phone, pinVerified: role === 'Manager' });
+  DB.users.push({ username, password, role, fullName, phone, pinVerified: true });
   saveDB();
   closeModal('userModal');
   renderUsers();
@@ -5232,15 +5499,16 @@ function addNewUser() {
 
 function renderUsers() {
   const tbody = document.getElementById('usersTbody');
-  tbody.innerHTML = DB.users.map((u, idx) => `<tr>
+  const visibleUsers = DB.users.filter(u => !u.hidden);
+  tbody.innerHTML = visibleUsers.map((u, idx) => `<tr>
     <td>${idx + 1}</td>
     <td><div style="font-weight:700">${u.username}</div><div style="font-size:0.72rem;color:var(--text2)">${u.fullName || ''}</div></td>
-    <td>${u.role === 'Manager' ? '👑 مدير' : u.role === 'Sales' ? '💼 مبيعات' : u.role === 'Support' ? '🔧 دعم' : '👁️ مشاهد'}</td>
+    <td>${u.role === 'Manager' ? '👑 أدمن' : u.role === 'WarehouseSales' ? '🛒 بائع / مخزن' : u.role === 'Sales' ? '💼 مبيعات' : u.role === 'Support' ? '🔧 دعم' : '👁️ مشاهد'}</td>
     <td>${u.phone || '-'}</td>
     <td>${u.pinVerified ? '<span class="badge badge-green">✅ مؤكد</span>' : '<span class="badge badge-yellow">⏳ بانتظار PIN</span>'}</td>
     <td>
-      ${currentUser.role === 'Manager' && u.username !== currentUser.username
-        ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${idx})">🗑️</button>`
+      ${currentUser && (currentUser.role === 'Manager' || currentUser.role === 'Owner') && u.username !== currentUser.username
+        ? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${u.username}')">🗑️</button>`
         : ''}
     </td>
   </tr>`).join('') || '<tr><td colspan="6" style="text-align:center">لا يوجد مستخدمين</td></tr>';
@@ -5457,9 +5725,11 @@ function autoSaveCustomer(name, phone) {
 }
 
 
-function deleteUser(idx) {
-  if (DB.users[idx].username === currentUser.username) { showToast('لا يمكن حذف نفسك', 'error'); return; }
-  DB.users.splice(idx, 1);
+function deleteUser(username) {
+  if (username === currentUser.username) { showToast('لا يمكن حذف نفسك', 'error'); return; }
+  const u = DB.users.find(x => x.username === username);
+  if (u && u.hidden) { showToast('لا يمكن حذف هذا المستخدم', 'error'); return; }
+  DB.users = DB.users.filter(x => x.username !== username);
   saveDB();
   renderUsers();
   showToast('تم حذف المستخدم');
@@ -7357,7 +7627,7 @@ function applyAdminControls() {
 function openChangePassModal() {
   if (!can('manageUsers')) { showToast('للإدمن فقط', 'error'); return; }
   const sel = document.getElementById('cpUserSel');
-  sel.innerHTML = DB.users.map(u => `<option value="${u.username}">${u.username} (${u.role})</option>`).join('');
+  sel.innerHTML = DB.users.filter(u => !u.hidden).map(u => `<option value="${u.username}">${u.username} (${u.role})</option>`).join('');
   document.getElementById('cpNewPass').value = '';
   document.getElementById('cpConfirmPass').value = '';
   openModal('changePassModal');
@@ -8256,7 +8526,9 @@ document.addEventListener('click', function(e) {
 });
 
 // Initialize on load
-loadDB();
+loadDB().then(() => {
+  // loadDB already loads data; login screen remains until user logs in
+}).catch(e => console.error('loadDB error', e));
 showPage('dashboard');
 
 </script>
