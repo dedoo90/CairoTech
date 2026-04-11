@@ -498,6 +498,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
       <div class="nav-dropdown-item" data-page="users"><span class="icon">🔐</span> المستخدمين والصلاحيات</div>
       <div class="nav-dropdown-item" data-page="activitylog"><span class="icon">📋</span> سجل العمليات</div>
       <div class="nav-dropdown-item" data-page="backup"><span class="icon">💾</span> النسخ الاحتياطي</div>
+      <div class="nav-dropdown-item" data-page="sync"><span class="icon">🔄</span> المزامنة</div>
       <div class="nav-dropdown-item" data-page="settings"><span class="icon">⚙️</span> الإعدادات</div>
     </div>
 
@@ -1287,6 +1288,97 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     </div>
 
     <!-- BACKUP -->
+    <!-- SYNC PAGE -->
+    <div class="page" id="page-sync">
+      <div class="page-header">
+        <div class="page-title">🔄 المزامنة <span>السحابية</span></div>
+        <div id="syncPageStatus" style="font-size:0.8rem;color:var(--text2)"></div>
+      </div>
+
+      <!-- Status Card -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <div style="font-size:3rem" id="syncStatusIcon">☁️</div>
+          <div style="flex:1">
+            <div style="font-size:1.1rem;font-weight:700" id="syncStatusTitle">GitHub غير مفعّل</div>
+            <div style="font-size:0.8rem;color:var(--text2);margin-top:4px" id="syncStatusSub">البيانات محفوظة محلياً فقط — أدخل بيانات GitHub للمزامنة بين الأجهزة</div>
+          </div>
+          <div id="syncConnectedDot" style="display:none;width:12px;height:12px;background:var(--green);border-radius:50%;box-shadow:0 0 8px var(--green)"></div>
+        </div>
+
+        <!-- Gist ID display -->
+        <div id="syncGistDisplay" style="display:none;margin-top:14px;background:var(--surface2);border-radius:10px;padding:10px 14px;font-size:0.78rem;color:var(--text2)">
+          🗄️ Gist ID: <code id="syncGistId" style="color:var(--accent);word-break:break-all;font-size:0.78rem"></code>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('syncGistId').textContent).then(()=>showToast('تم النسخ'))"
+            style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:0.82rem;margin-right:8px">📋 نسخ</button>
+        </div>
+      </div>
+
+      <!-- Setup Form -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:16px">
+        <div style="font-size:0.95rem;font-weight:700;margin-bottom:14px;color:var(--accent)">⚙️ إعدادات الاتصال بـ GitHub</div>
+        <div class="form-group">
+          <label>🔑 Personal Access Token <span style="color:var(--red)">*</span></label>
+          <input type="password" id="syncTokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+            style="direction:ltr;font-family:monospace;font-size:0.85rem" autocomplete="off">
+          <div style="font-size:0.72rem;color:var(--text2);margin-top:5px;line-height:1.7">
+            🔗 GitHub → Settings → Developer Settings → Personal access tokens → Tokens (classic) → New<br>
+            ✅ اختار صلاحية <strong>gist</strong> فقط — لا تحتاج أي صلاحيات أخرى
+          </div>
+        </div>
+        <div class="form-group">
+          <label>🗄️ Gist ID <span style="color:var(--text2);font-size:0.72rem">(فارغ = إنشاء Gist جديد تلقائياً)</span></label>
+          <input type="text" id="syncGistInput" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            style="direction:ltr;font-family:monospace;font-size:0.85rem" autocomplete="off">
+          <div style="font-size:0.72rem;color:var(--text2);margin-top:4px">
+            💡 لو عندك Gist موجود من جهاز تاني الصق الـ ID هنا للمزامنة معاه
+          </div>
+        </div>
+        <div id="syncSetupMsg" style="font-size:0.82rem;min-height:20px;margin-bottom:10px;color:var(--accent)"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-accent" onclick="syncPageConnect()" style="flex:1;min-width:140px;padding:12px;justify-content:center">🔗 ربط وتفعيل المزامنة</button>
+          <button class="btn btn-danger" onclick="syncPageDisconnect()" style="min-width:120px;padding:12px;justify-content:center">❌ إلغاء الاتصال</button>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+        <div class="stat-card green" style="padding:18px;cursor:pointer" onclick="syncPagePull()">
+          <div class="stat-icon">📥</div>
+          <div class="stat-value" style="font-size:0.95rem;color:var(--green)">استعادة من GitHub</div>
+          <div class="stat-label">اجلب أحدث بيانات من السحابة الآن</div>
+        </div>
+        <div class="stat-card blue" style="padding:18px;cursor:pointer" onclick="syncPagePush()">
+          <div class="stat-icon">📤</div>
+          <div class="stat-value" style="font-size:0.95rem">رفع للـ GitHub</div>
+          <div class="stat-label">ارفع بياناتك الحالية للسحابة الآن</div>
+        </div>
+        <div class="stat-card yellow" style="padding:18px">
+          <div class="stat-icon">⏱️</div>
+          <div class="stat-value" style="font-size:0.95rem;color:var(--yellow)">مزامنة تلقائية</div>
+          <div class="stat-label" id="autoSyncLabel">كل 3 ثواني عند تغيير البيانات</div>
+        </div>
+        <div class="stat-card purple" style="padding:18px">
+          <div class="stat-icon">📱</div>
+          <div class="stat-value" style="font-size:0.95rem;color:var(--purple)">تعدد الأجهزة</div>
+          <div class="stat-label">الكمبيوتر + الموبايل + أي جهاز</div>
+        </div>
+      </div>
+
+      <!-- How to use -->
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:18px;margin-top:8px">
+        <div style="font-size:0.88rem;font-weight:700;margin-bottom:10px">📖 خطوات إعداد المزامنة (مرة واحدة فقط)</div>
+        <div style="font-size:0.8rem;color:var(--text2);line-height:2">
+          1️⃣ روح على <strong>github.com</strong> وسجل دخول (أو أنشئ حساب مجاناً)<br>
+          2️⃣ Settings → Developer Settings → Personal access tokens → Tokens (classic)<br>
+          3️⃣ اضغط <strong>Generate new token</strong> → ضع وصف → اختر صلاحية <strong>gist</strong> فقط<br>
+          4️⃣ انسخ الـ Token والصقه في الخانة فوق ← اضغط <strong>ربط وتفعيل</strong><br>
+          5️⃣ انسخ الـ <strong>Gist ID</strong> اللي هيظهر وأدخله على باقي الأجهزة<br>
+          ✅ من الآن كل تغيير هيتزامن تلقائياً على كل الأجهزة!
+        </div>
+      </div>
+    </div>
+
     <div class="page" id="page-backup">
       <div class="page-header"><div class="page-title">💾 النسخ <span>الاحتياطي</span></div></div>
       <!-- GitHub Status Card -->
@@ -1509,10 +1601,14 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   <!-- Add Item Row -->
   <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
     <div class="grid-2">
-      <div class="form-group" style="margin-bottom:8px"><label>المنتج</label>
-        <select id="purProductSelect" onchange="onPurchaseProductChange()">
-          <option value="">اختر المنتج...</option>
-        </select>
+      <div class="form-group" style="margin-bottom:8px;position:relative"><label>المنتج</label>
+        <input type="text" id="purProductSearch" placeholder="🔍 اكتب اسم المنتج أو 3 حروف للبحث..."
+          autocomplete="off" oninput="purSearchInput(this.value)" onfocus="purSearchInput(this.value)"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'Cairo',sans-serif;font-size:0.9rem;outline:none;transition:border-color .2s"
+          onkeydown="purKeyNav(event)">
+        <input type="hidden" id="purProductSelect">
+        <div id="purProductDropdown"
+          style="display:none;position:absolute;top:100%;right:0;left:0;background:var(--surface);border:1px solid var(--accent);border-radius:10px;z-index:9999;max-height:220px;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,.2);margin-top:2px"></div>
       </div>
       <div class="form-group" style="margin-bottom:8px"><label>سعر الشراء</label>
         <input type="number" id="purPrice" placeholder="0" step="0.01">
@@ -2600,6 +2696,7 @@ function showPage(page) {
   if (page === 'activitylog') renderActivityLog();
   if (page === 'users') renderUsers();
   if (page === 'backup') updateGhStatusCard();
+  if (page === 'sync') renderSyncPage();
 }
 
 function toggleSidebar() {
@@ -3268,9 +3365,9 @@ function openPurchaseModal() {
   const suppSelect = document.getElementById('purSupplier');
   suppSelect.innerHTML = '<option value="">اختر المورد...</option>' +
     DB.suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-  const prodSelect = document.getElementById('purProductSelect');
-  prodSelect.innerHTML = '<option value="">اختر المنتج...</option>' +
-    DB.products.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  const _ps = document.getElementById('purProductSearch'); if(_ps){_ps.value='';}
+  const _ph = document.getElementById('purProductSelect'); if(_ph){_ph.value='';}
+  const _pd = document.getElementById('purProductDropdown'); if(_pd){_pd.style.display='none';_pd.innerHTML='';}
   document.getElementById('purSupplierPhone').value = '';
   document.getElementById('purInvoiceType').value = 'cash';
   document.getElementById('purPaymentMethod').value = 'cash';
@@ -3335,7 +3432,9 @@ function addPurchaseItem() {
   purCart.push({ productId, name: product.name, price, qty, serials: product.hasSerial === false ? [] : serials, total: price * qty, noSerial: product.hasSerial === false });
 
   // Reset item row
+  const _psr = document.getElementById('purProductSearch'); if(_psr) _psr.value='';
   document.getElementById('purProductSelect').value = '';
+  const _pdr = document.getElementById('purProductDropdown'); if(_pdr){_pdr.style.display='none';_pdr.innerHTML='';}
   document.getElementById('purPrice').value = '';
   document.getElementById('purSerials').value = '';
   document.getElementById('purQty').value = '1';
@@ -3351,12 +3450,63 @@ function onPurchaseSupplierChange() {
   }
 }
 
-function onPurchaseProductChange() {
-  const prodId = document.getElementById('purProductSelect').value;
-  if (prodId) {
-    const prod = DB.products.find(p => p.id == prodId);
-    if (prod) document.getElementById('purPrice').value = prod.buyPrice || '';
+// ===== PURCHASE PRODUCT SEARCH =====
+let _purDropIdx = -1;
+
+function purSearchInput(val) {
+  _purDropIdx = -1;
+  const drop = document.getElementById('purProductDropdown');
+  if (!drop) return;
+  const q = (val || '').trim().toLowerCase();
+  // Show all if empty, filter if 3+ chars or any chars typed
+  const matches = q.length >= 1
+    ? DB.products.filter(p => p.name.toLowerCase().includes(q) || String(p.id).includes(q)).slice(0, 40)
+    : DB.products.slice(0, 40);
+  if (!matches.length) {
+    drop.innerHTML = '<div style="padding:12px 14px;color:var(--text2);font-size:0.82rem;text-align:center">لا يوجد منتج مطابق</div>';
+    drop.style.display = 'block'; return;
   }
+  drop.innerHTML = matches.map((p, i) => {
+    const stock = typeof getProductStock === 'function' ? getProductStock(p.id) : '?';
+    const safe = p.name.replace(/'/g,"\'").replace(/"/g,'&quot;');
+    return `<div id="purDrop_${i}" onclick="purSelectProduct(${p.id},'${safe}',${p.buyPrice||0})"
+      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;transition:background .12s"
+      onmouseover="purDropHover(${i})" onmouseout="this.style.background=''">
+      <span style="font-weight:700">${p.name}</span>
+      <span style="font-size:0.72rem;color:var(--text2);white-space:nowrap;margin-right:8px">شراء: ${formatMoney(p.buyPrice||0)} | مخزون: ${stock}</span>
+    </div>`;
+  }).join('');
+  drop.style.display = 'block';
+}
+
+function purDropHover(i) {
+  _purDropIdx = i;
+  document.querySelectorAll('#purProductDropdown > div').forEach((el,j) => {
+    el.style.background = j === i ? 'var(--surface2)' : '';
+  });
+}
+
+function purKeyNav(e) {
+  const drop = document.getElementById('purProductDropdown');
+  if (!drop || drop.style.display === 'none') return;
+  const items = drop.querySelectorAll('div[id^="purDrop_"]');
+  if (!items.length) return;
+  if (e.key === 'ArrowDown')  { e.preventDefault(); _purDropIdx = Math.min(_purDropIdx+1, items.length-1); purDropHover(_purDropIdx); items[_purDropIdx]?.scrollIntoView({block:'nearest'}); }
+  if (e.key === 'ArrowUp')    { e.preventDefault(); _purDropIdx = Math.max(_purDropIdx-1, 0); purDropHover(_purDropIdx); items[_purDropIdx]?.scrollIntoView({block:'nearest'}); }
+  if (e.key === 'Enter' && _purDropIdx >= 0) { e.preventDefault(); items[_purDropIdx]?.click(); }
+  if (e.key === 'Escape')     { drop.style.display = 'none'; }
+}
+
+function purSelectProduct(id, name, buyPrice) {
+  const h = document.getElementById('purProductSelect'); if(h) h.value = id;
+  const s = document.getElementById('purProductSearch');  if(s) s.value = name;
+  const p = document.getElementById('purPrice');          if(p) p.value = buyPrice || '';
+  const d = document.getElementById('purProductDropdown'); if(d) d.style.display = 'none';
+  _purDropIdx = -1;
+}
+
+function onPurchaseProductChange() {
+  // legacy compat - handled by purSelectProduct now
 }
 
 function onPurchaseInvoiceTypeChange() {
@@ -3566,10 +3716,9 @@ function editPurchaseInvoice(id) {
   const suppSelect = document.getElementById('purSupplier');
   suppSelect.innerHTML = '<option value="">اختر المورد...</option>' +
     DB.suppliers.map(s => `<option value="${s.id}" ${s.id == inv.supplierId ? 'selected' : ''}>${s.name}</option>`).join('');
-  const prodSelect = document.getElementById('purProductSelect');
-  prodSelect.innerHTML = '<option value="">اختر المنتج...</option>' +
-    DB.products.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-
+  const _ps2 = document.getElementById('purProductSearch'); if(_ps2){_ps2.value='';}
+  const _ph2 = document.getElementById('purProductSelect'); if(_ph2){_ph2.value='';}
+  const _pd2 = document.getElementById('purProductDropdown'); if(_pd2){_pd2.style.display='none';_pd2.innerHTML='';}
   document.getElementById('purSupplierPhone').value = inv.supplierPhone || '';
   document.getElementById('purInvoiceType').value = inv.invoiceType || 'cash';
   document.getElementById('purPaymentMethod').value = inv.paymentMethod || 'cash';
@@ -8466,6 +8615,96 @@ function exportASImg(entityId, entityType, entityName) {
 }
 
 
+
+// ================= SYNC PAGE =================
+function renderSyncPage() {
+  const hasToken = !!ghToken();
+  const hasGist  = !!ghGistId();
+  const connected = hasToken && hasGist;
+
+  const icon   = document.getElementById('syncStatusIcon');
+  const title  = document.getElementById('syncStatusTitle');
+  const sub    = document.getElementById('syncStatusSub');
+  const dot    = document.getElementById('syncConnectedDot');
+  const gDisp  = document.getElementById('syncGistDisplay');
+  const gId    = document.getElementById('syncGistId');
+  const tInput = document.getElementById('syncTokenInput');
+  const gInput = document.getElementById('syncGistInput');
+
+  if(icon)  icon.textContent  = connected ? '✅' : hasToken ? '⚠️' : '☁️';
+  if(title) title.textContent = connected ? 'متصل بـ GitHub — مزامنة كل 3 ثواني 🟢' : hasToken ? 'Token مُدخل — أضف Gist ID' : 'غير مفعّل';
+  if(sub)   sub.textContent   = connected
+    ? (ghLastSaved ? 'آخر حفظ: '+ghLastSaved.toLocaleTimeString('ar-EG') : 'بانتظار أول تغيير...')
+    : 'أدخل بيانات GitHub للمزامنة بين أجهزتك';
+  if(dot)   dot.style.display = connected ? 'block' : 'none';
+  if(gDisp) gDisp.style.display = connected ? 'block' : 'none';
+  if(gId)   gId.textContent   = ghGistId();
+  if(tInput && !tInput.value) tInput.value = ghToken();
+  if(gInput && !gInput.value) gInput.value = ghGistId();
+}
+
+async function syncPageConnect() {
+  const token  = document.getElementById('syncTokenInput').value.trim();
+  const gistId = document.getElementById('syncGistInput').value.trim();
+  const msg    = document.getElementById('syncSetupMsg');
+  if (!token) { msg.textContent='❌ أدخل الـ Token أولاً'; msg.style.color='var(--red)'; return; }
+  msg.textContent='⏳ جاري التحقق...'; msg.style.color='var(--accent)';
+  localStorage.setItem(GH_TOKEN_KEY, token);
+  try {
+    const r = await fetch('https://api.github.com/user',{headers:{'Authorization':'token '+token}});
+    if (!r.ok) throw new Error('Token غير صالح ('+r.status+')');
+    const ud = await r.json();
+    msg.textContent = '✅ مرحباً '+(ud.name||ud.login)+'!';
+    if (gistId) {
+      localStorage.setItem(GH_GIST_KEY, gistId);
+      msg.textContent += ' — جاري استعادة البيانات...';
+      const ok = await ghPull(true);
+      msg.textContent = ok ? '✅ تم الربط واستعادة البيانات بنجاح!' : '⚠️ تم حفظ الإعدادات لكن تعذّر جلب البيانات';
+      if (ok) { initApp(); showToast('✅ تم جلب البيانات من GitHub'); }
+    } else {
+      msg.textContent += ' — جاري إنشاء Gist جديد...';
+      const gr = await fetch('https://api.github.com/gists',{
+        method:'POST',headers:ghHeaders(),
+        body:JSON.stringify({description:'DigiTronics Database',public:false,files:{[GH_FILENAME]:{content:JSON.stringify(DB)}}})
+      });
+      if (!gr.ok) throw new Error('فشل إنشاء Gist ('+gr.status+')');
+      const gd = await gr.json();
+      localStorage.setItem(GH_GIST_KEY, gd.id);
+      msg.textContent = '✅ تم إنشاء Gist جديد! انسخ الـ ID وأدخله على باقي الأجهزة';
+      msg.style.color = 'var(--green)';
+    }
+    renderSyncPage();
+    updateGhStatusCard();
+  } catch(e) {
+    msg.textContent='❌ '+e.message; msg.style.color='var(--red)';
+    console.error('syncPageConnect', e);
+  }
+}
+
+function syncPageDisconnect() {
+  if (!confirm('هل تريد إلغاء الاتصال بـ GitHub؟ البيانات ستبقى محلياً')) return;
+  localStorage.removeItem(GH_TOKEN_KEY);
+  localStorage.removeItem(GH_GIST_KEY);
+  const t = document.getElementById('syncTokenInput'); if(t) t.value='';
+  const g = document.getElementById('syncGistInput');  if(g) g.value='';
+  const m = document.getElementById('syncSetupMsg');   if(m){m.textContent='✅ تم إلغاء الاتصال';m.style.color='var(--text2)';}
+  renderSyncPage();
+  updateGhStatusCard();
+  showToast('تم إلغاء الاتصال بـ GitHub');
+}
+
+async function syncPagePull() {
+  if (!ghToken()||!ghGistId()) { showToast('أدخل بيانات GitHub أولاً','error'); return; }
+  const ok = await ghPull(false);
+  if (ok) { initApp(); renderSyncPage(); }
+}
+
+async function syncPagePush() {
+  if (!ghToken()||!ghGistId()) { showToast('أدخل بيانات GitHub أولاً','error'); return; }
+  await ghPush(false);
+  renderSyncPage();
+}
+
 // Keyboard shortcuts
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
@@ -8541,6 +8780,11 @@ function toggleSidebarExpand() {
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.nav-icon-btn') && !e.target.closest('.nav-dropdown')) {
     closeAllNavDropdowns();
+  }
+  // Close purchase product dropdown on outside click
+  if (!e.target.closest('#purProductSearch') && !e.target.closest('#purProductDropdown')) {
+    const d = document.getElementById('purProductDropdown');
+    if (d) d.style.display = 'none';
   }
 });
 
