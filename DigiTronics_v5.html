@@ -3807,9 +3807,13 @@ function updatePurchaseInvoice(id) {
     addStockMovement(item.productId, 'out', item.qty, `إلغاء شراء قديم - فاتورة ${id}`);
   });
 
-  // Reverse old cash entry if cash invoice — use OLD payment method
-  if (inv.invoiceType === 'cash' && oldTotal > 0) {
-    addCashEntry('in', oldTotal, inv.paymentMethod || 'cash', `إلغاء دفعة قديمة - فاتورة شراء ${id}`);
+  // ===== TREASURY SYNC =====
+  const oldInvType = inv.invoiceType;
+  const oldPayMethod = inv.paymentMethod;
+
+  // Reverse old cash entry from OLD payment method account
+  if (oldInvType === 'cash' && oldTotal > 0) {
+    addCashEntry('in', oldTotal, oldPayMethod || 'cash', `↩️ عكس دفعة - تعديل فاتورة شراء ${id}`);
   }
 
   // Apply new inventory effects
@@ -3825,10 +3829,15 @@ function updatePurchaseInvoice(id) {
     addStockMovement(item.productId, 'in', item.qty, `تحديث شراء - فاتورة ${id}`);
   });
 
-  // Add new cash entry — use NEW payment method
+  // Add new cash entry to NEW payment method account
   if (invoiceType === 'cash' && newTotal > 0) {
-    addCashEntry('out', newTotal, paymentMethod, `شراء محدّث - فاتورة ${id} - ${supplierName || 'مورد'}`);
+    addCashEntry('out', newTotal, paymentMethod, `✏️ دفعة معدّلة - فاتورة شراء ${id} - ${supplierName || 'مورد'}`);
   }
+
+  const purPayLabel = m => m==='cash'?'كاش':m==='vodafone'?'فودافون':m==='instapay'?'InstaPay':m==='fawry'?'فوري':m||'';
+  const purTMsg = (oldInvType==='cash' && invoiceType==='cash' && oldPayMethod !== paymentMethod)
+    ? ` | تحويل خزنة: ${purPayLabel(oldPayMethod)} → ${purPayLabel(paymentMethod)}`
+    : (oldInvType==='cash' || invoiceType==='cash') ? ' | الخزنة تم تحديثها' : '';
 
   // ===== UPDATE INVOICE RECORD =====
   inv.supplierId = supplierId || null;
@@ -3849,12 +3858,12 @@ function updatePurchaseInvoice(id) {
   if (saveBtn) { saveBtn.textContent = '💾 حفظ الفاتورة'; saveBtn.setAttribute('onclick', 'savePurchase()'); }
   document.querySelector('#purchaseModal .modal-title').childNodes[0].textContent = '🛍️ فاتورة شراء جديدة';
 
-  logActivity('تعديل فاتورة شراء', `#${id} — المخزون والخزنة تم تحديثهم`);
+  logActivity('تعديل فاتورة شراء', `#${id}${purTMsg}`);
   saveDB();
   closeModal('purchaseModal');
   renderPurchases();
   renderTreasury();
-  showToast(`✅ تم تحديث فاتورة الشراء #${id} والمخزون والخزنة`);
+  showToast(`✅ تم تحديث فاتورة الشراء #${id}${purTMsg}`);
   purCart = [];
 }
 
@@ -7005,14 +7014,22 @@ function saveEditSaleInvoice() {
   const newPayment = document.getElementById('editSaleInvPayment').value;
   const newInvoiceType = document.getElementById('editSaleInvType').value;
 
-  // Reverse old cash entry if old invoice was cash
-  if (oldInvoiceType !== 'ajel' && oldTotal > 0) {
-    addCashEntry('out', oldTotal, oldPayment || 'cash', `إلغاء دفعة قديمة - فاتورة بيع #${id}`);
+  // Determine if original invoice had a cash entry (not ajel and not installment)
+  const oldHadCashEntry = (oldInvoiceType !== 'ajel') && (oldPayment !== 'installment') && oldTotal > 0;
+  const newHasCashEntry = (newInvoiceType !== 'ajel') && (newPayment !== 'installment') && newTotal > 0;
+
+  // Reverse old cash entry from OLD payment method account
+  if (oldHadCashEntry) {
+    addCashEntry('out', oldTotal, oldPayment, `↩️ عكس دفعة - تعديل فاتورة بيع #${id}`);
   }
-  // Apply new cash entry if new invoice is cash
-  if (newInvoiceType !== 'ajel' && newTotal > 0) {
-    addCashEntry('in', newTotal, newPayment || 'cash', `دفعة جديدة - تعديل فاتورة بيع #${id}`);
+  // Add new cash entry to NEW payment method account
+  if (newHasCashEntry) {
+    addCashEntry('in', newTotal, newPayment, `✏️ دفعة معدّلة - فاتورة بيع #${id}`);
   }
+
+  const treasuryMsg = oldHadCashEntry && newHasCashEntry
+    ? ` | خزنة: ${oldPayment} → ${newPayment}`
+    : '';
 
   inv.customer = document.getElementById('editSaleInvCustomer').value.trim() || inv.customer;
   inv.customerPhone = document.getElementById('editSaleInvPhone').value.trim();
@@ -7027,12 +7044,16 @@ function saveEditSaleInvoice() {
   inv.editedAt = new Date().toISOString();
   inv.editedBy = currentUser ? currentUser.username : 'system';
 
-  logActivity('تعديل فاتورة بيع كامل', `#${id} - ${inv.customer} - ${formatMoney(newTotal)} — خزنة ${newPayment} — المخزون والخزنة تم تحديثهم`);
+  logActivity('تعديل فاتورة بيع', `#${id} - ${inv.customer} - ${formatMoney(newTotal)}${treasuryMsg}`);
   saveDB();
   closeModal('editSaleInvoiceModal');
   renderInvoices();
   renderTreasury();
-  showToast(`✅ تم تعديل فاتورة البيع #${id} والمخزون والخزنة`);
+  const payLabel = m => m==='cash'?'كاش':m==='vodafone'?'فودافون':m==='instapay'?'InstaPay':m==='fawry'?'فوري':m||'';
+  const tMsg = (oldHadCashEntry && newHasCashEntry && oldPayment !== newPayment)
+    ? ` | تحويل خزنة: ${payLabel(oldPayment)} → ${payLabel(newPayment)}`
+    : (oldHadCashEntry || newHasCashEntry) ? ' | الخزنة تم تحديثها' : '';
+  showToast(`✅ تم تعديل فاتورة البيع #${id}${tMsg}`);
   editSaleInvItems = [];
 }
 
