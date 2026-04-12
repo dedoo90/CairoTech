@@ -410,7 +410,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 <div id="loginScreen">
   <div class="login-box">
     <div class="login-logo">⚡ CairoTech</div>
-    <div class="login-sub">نظام الإدارة الاحترافي بالسيريالات v7</div>
+    <div class="login-sub">نظام الإدارة الاحترافي بالسيريالات v6</div>
     <div class="form-group"><label>اسم المستخدم</label><input type="text" id="loginUser" placeholder="username" autocomplete="username" onkeypress="if(event.key==='Enter')doLogin()"></div>
     <div class="form-group"><label>كلمة المرور</label><input type="password" id="loginPass" placeholder="password" autocomplete="current-password" onkeypress="if(event.key==='Enter')doLogin()"></div>
     <div id="loginSyncMsg" style="display:none;font-size:0.8rem;color:var(--accent);text-align:center;padding:8px;background:rgba(0,102,255,.07);border-radius:8px;margin-bottom:6px"></div>
@@ -722,6 +722,11 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
             <!-- Party Selector (Customer or Supplier based on mode) -->
             <div style="margin-bottom:5px">
+              <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px">
+                <input type="text" id="cartCustomerSearch" placeholder="🔍 بحث باسم العميل أو التليفون..."
+                  oninput="filterCartCustomers(this.value)"
+                  style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:Cairo,sans-serif;font-size:0.8rem;outline:none">
+              </div>
               <div style="display:flex;gap:4px;align-items:center">
                 <select class="discount-input" id="cartCustomerSelect" style="flex:1" onchange="onCartCustomerSelect()">
                   <option value="">👤 اختر عميل (اختياري)...</option>
@@ -1614,8 +1619,17 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
         <input type="number" id="purPrice" placeholder="0" step="0.01">
       </div>
     </div>
-    <div class="form-group" style="margin-bottom:8px"><label>السيريالات (واحد في كل سطر — اتركه فارغاً لو المنتج بدون سيريال)</label>
-      <textarea id="purSerials" rows="3" placeholder="SN123456&#10;SN789012&#10;...&#10;(اتركه فارغاً للمنتجات بدون سيريال)"></textarea>
+    <div class="form-group" style="margin-bottom:8px">
+      <label>السيريالات — <span id="purSerialsCount" style="color:var(--accent);font-weight:700">0 سيريال</span></label>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input type="text" id="purScanInput" placeholder="📷 اسكان سيريال هنا ثم Enter..."
+          style="flex:1;background:var(--surface2);border:2px solid var(--green);border-radius:8px;padding:8px 12px;color:var(--text);font-family:Cairo,sans-serif;font-size:0.88rem;outline:none"
+          onkeydown="purScanSerial(event)">
+        <button class="btn btn-green btn-sm" onclick="purScanFocus()" title="تركيز على الاسكانر">🎯</button>
+      </div>
+      <textarea id="purSerials" rows="3" placeholder="SN123456&#10;SN789012&#10;...&#10;(اتركه فارغاً للمنتجات بدون سيريال)"
+        oninput="updatePurSerialsCount()"></textarea>
+      <div style="font-size:0.68rem;color:var(--text2);margin-top:3px">💡 اكتب سيريال واحد في كل سطر، أو استخدم الاسكانر بالأعلى</div>
     </div>
     <div class="form-group" style="margin-bottom:4px"><label>الكمية (للمنتجات بدون سيريال)</label>
       <input type="number" id="purQty" value="1" min="1">
@@ -1937,8 +1951,8 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     </div>
   </div>
 
-  <div class="alert alert-warning" style="margin-top:12px;font-size:0.75rem">
-    ⚠️ تعديل الكمية لا يؤثر على المخزون تلقائياً — تأكد من تعديل المخزون يدوياً إذا لزم الأمر
+  <div class="alert alert-info" style="margin-top:12px;font-size:0.75rem">
+    ✅ عند الحفظ سيتم مزامنة المخزون والخزنة تلقائياً بناءً على السيريالات والكميات الجديدة
   </div>
 
   <div class="modal-footer">
@@ -3420,6 +3434,30 @@ function addPurchaseItem() {
   const product = DB.products.find(p => p.id === productId);
   const serials = serialsText.split(/\n/).map(s => s.trim()).filter(s => s);
 
+  // Check for duplicate serials within the current input
+  const uniqueSerials = [...new Set(serials)];
+  if (uniqueSerials.length !== serials.length) {
+    showToast('⚠️ يوجد سيريالات مكررة في القائمة — تم حذف المكرر', 'error');
+    document.getElementById('purSerials').value = uniqueSerials.join('\n');
+    updatePurSerialsCount();
+    return;
+  }
+
+  // Check for duplicates against already-existing serials in DB
+  const duplicatesInDB = serials.filter(sn => DB.serials.find(x => x.serial === sn));
+  if (duplicatesInDB.length > 0) {
+    showToast(`❌ السيريالات التالية موجودة مسبقاً: ${duplicatesInDB.slice(0,3).join(', ')}`, 'error');
+    return;
+  }
+
+  // Check duplicates against current purCart
+  const cartSerials = purCart.flatMap(i => i.serials);
+  const duplicatesInCart = serials.filter(sn => cartSerials.includes(sn));
+  if (duplicatesInCart.length > 0) {
+    showToast(`❌ سيريال مكرر في الفاتورة الحالية: ${duplicatesInCart.slice(0,3).join(', ')}`, 'error');
+    return;
+  }
+
   let qty;
   if (product.hasSerial === false) {
     qty = qtyInput;
@@ -3438,8 +3476,10 @@ function addPurchaseItem() {
   document.getElementById('purPrice').value = '';
   document.getElementById('purSerials').value = '';
   document.getElementById('purQty').value = '1';
+  document.getElementById('purScanInput').value = '';
+  updatePurSerialsCount();
   renderPurCart();
-  showToast('تم إضافة الصنف');
+  showToast(`✅ تم إضافة الصنف (${qty} وحدة)`);
 }
 
 function onPurchaseSupplierChange() {
@@ -3645,6 +3685,7 @@ function renderPurchases(filter = '') {
         <button class="btn btn-sm btn-accent" onclick="viewPurchaseInvoice('${p.id}')">👁️</button>
         <button class="btn btn-sm btn-yellow" onclick="exportPurchaseImg('${p.id}')">📤</button>
         <button class="btn btn-sm btn-outline" onclick="editPurchaseInvoice('${p.id}')">✏️</button>
+        ${can('deleteData') ? `<button class="btn btn-sm btn-danger" onclick="deletePurchaseInvoice('${p.id}')">🗑️</button>` : ''}
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="10" style="text-align:center">لا توجد فواتير</td></tr>';
@@ -3749,8 +3790,47 @@ function updatePurchaseInvoice(id) {
   const invoiceType = document.getElementById('purInvoiceType').value;
   const paymentMethod = document.getElementById('purPaymentMethod').value;
   const newTotal = purCart.reduce((s, i) => s + i.total, 0);
+  const oldTotal = inv.total;
   const supplierName = supplierId ? (DB.suppliers.find(s => s.id == supplierId)?.name || '') : '';
 
+  // ===== REVERSE OLD INVOICE EFFECTS =====
+  const oldItems = inv.items || [];
+  oldItems.forEach(item => {
+    if (item.serials && item.serials.length > 0) {
+      // Remove old serials from DB
+      DB.serials = DB.serials.filter(s => !item.serials.includes(s.serial) || s.purchaseInvoiceId !== id);
+    } else {
+      // Decrement no-serial stock
+      const prod = DB.products.find(p => p.id === item.productId);
+      if (prod) prod.stockQty = Math.max(0, (prod.stockQty || 0) - item.qty);
+    }
+    addStockMovement(item.productId, 'out', item.qty, `إلغاء شراء قديم - فاتورة ${id}`);
+  });
+
+  // Reverse old cash entry if cash invoice
+  if (inv.invoiceType === 'cash' && oldTotal > 0) {
+    addCashEntry('in', oldTotal, inv.paymentMethod || 'cash', `إلغاء مشتريات قديمة - فاتورة ${id}`);
+  }
+
+  // ===== APPLY NEW INVOICE EFFECTS =====
+  purCart.forEach(item => {
+    const prod = DB.products.find(p => p.id === item.productId);
+    if (item.noSerial) {
+      if (prod) prod.stockQty = (prod.stockQty || 0) + item.qty;
+    } else {
+      item.serials.forEach(serial => {
+        DB.serials.push({ serial, productId: item.productId, status: 'available', purchaseInvoiceId: id, saleInvoiceId: null, purchasePrice: item.price });
+      });
+    }
+    addStockMovement(item.productId, 'in', item.qty, `تحديث شراء - فاتورة ${id}`);
+  });
+
+  // Add new cash entry if cash invoice
+  if (invoiceType === 'cash' && newTotal > 0) {
+    addCashEntry('out', newTotal, paymentMethod, `شراء محدّث - فاتورة ${id} - ${supplierName || 'مورد'}`);
+  }
+
+  // ===== UPDATE INVOICE RECORD =====
   inv.supplierId = supplierId || null;
   inv.supplier = supplierName;
   inv.supplierPhone = supplierPhone;
@@ -3761,17 +3841,20 @@ function updatePurchaseInvoice(id) {
   inv.productId = purCart[0].productId;
   inv.qty = purCart.reduce((s, i) => s + i.qty, 0);
   inv.price = purCart[0].price;
+  inv.editedAt = new Date().toISOString();
+  inv.editedBy = currentUser ? currentUser.username : 'system';
 
   // Reset save button
   const saveBtn = document.querySelector('#purchaseModal .btn-accent');
   if (saveBtn) { saveBtn.textContent = '💾 حفظ الفاتورة'; saveBtn.setAttribute('onclick', 'savePurchase()'); }
   document.querySelector('#purchaseModal .modal-title').childNodes[0].textContent = '🛍️ فاتورة شراء جديدة';
 
-  logActivity('تعديل فاتورة شراء', `#${id}`);
+  logActivity('تعديل فاتورة شراء', `#${id} — المخزون والخزنة تم تحديثهم`);
   saveDB();
   closeModal('purchaseModal');
   renderPurchases();
-  showToast(`✅ تم تحديث فاتورة الشراء #${id}`);
+  renderTreasury();
+  showToast(`✅ تم تحديث فاتورة الشراء #${id} والمخزون والخزنة`);
   purCart = [];
 }
 
@@ -4494,6 +4577,12 @@ function loadReturnInvoice() {
     if (hasSerials) {
       itemHtml += `<div id="retSerials_${idx}" style="display:none;margin-right:24px;margin-top:6px">
         <div style="font-size:0.72rem;color:var(--text2);margin-bottom:4px">اختر السيريالات المرتجعة:</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <input type="text" id="retScan_${idx}" placeholder="📷 اسكان سيريال + Enter..."
+            style="flex:1;background:var(--surface2);border:2px solid var(--green);border-radius:6px;padding:6px 10px;color:var(--text);font-family:Cairo,sans-serif;font-size:0.82rem;outline:none"
+            onkeydown="retScanSerial(event,${idx})">
+          <button class="btn btn-green btn-sm" onclick="document.getElementById('retScan_${idx}').focus()">🎯</button>
+        </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">`;
       item.serials.forEach(s => {
         const serial = DB.serials.find(x => x.serial === s);
@@ -4766,6 +4855,32 @@ function deleteReturn(id) {
   saveDB();
   renderReturns();
   showToast('تم حذف المرتجع');
+}
+
+// Scan serial in return modal
+function retScanSerial(e, idx) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const scanEl = document.getElementById('retScan_' + idx);
+  const scanned = (scanEl.value || '').trim();
+  if (!scanned) return;
+  // Find checkbox with this serial value
+  const checkboxes = document.querySelectorAll('.retSerial_' + idx);
+  let found = false;
+  checkboxes.forEach(cb => {
+    if (cb.value.toLowerCase() === scanned.toLowerCase() && !cb.disabled) {
+      cb.checked = true;
+      cb.closest('label').style.background = 'rgba(0,168,84,0.2)';
+      found = true;
+    }
+  });
+  if (found) {
+    showToast('✅ تم تحديد: ' + scanned, 'success');
+  } else {
+    showToast('❌ السيريال غير موجود في هذه الفاتورة أو غير متاح للإرجاع', 'error');
+  }
+  scanEl.value = '';
+  scanEl.focus();
 }
 
 // ================= WARRANTY =================
@@ -6084,6 +6199,15 @@ function serialPickerBarcodeKeydown(e) {
     const scanned = barcodeEl.value.trim();
     if (!scanned) return;
     
+    // Check if already selected in another cart item
+    const productId = parseInt(document.getElementById('serialPickerProdId').value);
+    const cartDuplicate = currentCart.find(ci => ci.productId !== productId && ci.serials && ci.serials.includes(scanned));
+    if (cartDuplicate) {
+      showToast('❌ هذا السيريال مختار مسبقاً في صنف آخر بالسلة', 'error');
+      barcodeEl.select();
+      return;
+    }
+
     // Find in grid
     const items = document.querySelectorAll('#serialPickerGrid .serial-picker-item');
     let found = false;
@@ -6559,6 +6683,7 @@ function renderInvoices(filter = '') {
         <button class="btn btn-sm btn-green" onclick="shareInvWhatsApp('${inv.id}')">📱</button>
         <button class="btn btn-sm btn-yellow" onclick="exportInvoiceImg('${inv.id}')">📤</button>
         ${can('editInvoices') ? `<button class="btn btn-sm btn-yellow" onclick="openEditSaleInvoice('${inv.id}')">✏️</button>` : ''}
+        ${can('deleteData') ? `<button class="btn btn-sm btn-danger" onclick="deleteSaleInvoice('${inv.id}')">🗑️</button>` : ''}
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="9" style="text-align:center">لا توجد فواتير</td></tr>';
@@ -6621,15 +6746,30 @@ function renderEditSaleItems() {
 
   document.getElementById('editSaleInvItems').innerHTML = editSaleInvItems.length === 0
     ? '<div style="text-align:center;padding:16px;color:var(--text2)">لا توجد أصناف</div>'
-    : editSaleInvItems.map((item, idx) => `
+    : editSaleInvItems.map((item, idx) => {
+      const hasSerials = item.serials && item.serials.length > 0;
+      const serialsDisplay = hasSerials
+        ? `<div style="margin-top:6px">
+            <label style="font-size:0.72rem;color:var(--text2);display:block;margin-bottom:4px">📋 السيريالات (واحد في كل سطر)</label>
+            <div style="display:flex;gap:6px;margin-bottom:4px">
+              <input type="text" id="editScanSerial_${idx}" placeholder="📷 اسكان سيريال + Enter..."
+                style="flex:1;background:var(--surface2);border:1px solid var(--green);border-radius:6px;padding:5px 8px;color:var(--text);font-family:Cairo,sans-serif;font-size:0.8rem;outline:none"
+                onkeydown="editScanSerialKey(event,${idx})">
+            </div>
+            <textarea id="editSerials_${idx}" rows="2"
+              style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--accent);font-family:monospace;font-size:0.75rem;outline:none"
+              oninput="editSerialsChanged(${idx})">${(item.serials || []).join('\n')}</textarea>
+            <div style="font-size:0.68rem;color:var(--text2);margin-top:2px">عدد السيريالات: <span id="editSerialsCount_${idx}" style="color:var(--accent);font-weight:700">${(item.serials||[]).length}</span></div>
+          </div>`
+        : '';
+      return `
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <span style="font-weight:700;font-size:0.85rem">${item.name}</span>
           <button onclick="removeEditSaleItem(${idx})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem">🗑️</button>
         </div>
-        ${item.serials && item.serials.length > 0
-          ? `<div style="font-size:0.68rem;color:var(--text2);margin-bottom:6px">📋 ${item.serials.join(' | ')}</div>` : ''}
-        <div class="grid-2" style="gap:6px">
+        ${serialsDisplay}
+        <div class="grid-2" style="gap:6px;margin-top:6px">
           <div>
             <label style="font-size:0.72rem;color:var(--text2)">الكمية</label>
             <input type="number" min="1" value="${item.qty}"
@@ -6654,13 +6794,170 @@ function renderEditSaleItems() {
             </div>
           </div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 }
 
 function removeEditSaleItem(idx) {
   if (!confirm('هل تريد حذف هذا الصنف من الفاتورة؟')) return;
   editSaleInvItems.splice(idx, 1);
   renderEditSaleItems();
+}
+
+// Serial scan in edit sale invoice
+function editScanSerialKey(e, idx) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const scanEl = document.getElementById('editScanSerial_' + idx);
+  const scanned = scanEl.value.trim();
+  if (!scanned) return;
+  const ta = document.getElementById('editSerials_' + idx);
+  if (!ta) return;
+  const existing = ta.value.split('\n').map(s => s.trim()).filter(s => s);
+  if (existing.includes(scanned)) { showToast('السيريال مكرر', 'error'); scanEl.value = ''; return; }
+  existing.push(scanned);
+  ta.value = existing.join('\n');
+  editSerialsChanged(idx);
+  scanEl.value = '';
+  showToast('✅ تم إضافة: ' + scanned, 'success');
+}
+
+function editSerialsChanged(idx) {
+  const ta = document.getElementById('editSerials_' + idx);
+  if (!ta) return;
+  const serials = ta.value.split('\n').map(s => s.trim()).filter(s => s);
+  editSaleInvItems[idx].serials = serials;
+  editSaleInvItems[idx].qty = serials.length > 0 ? serials.length : editSaleInvItems[idx].qty;
+  const countEl = document.getElementById('editSerialsCount_' + idx);
+  if (countEl) countEl.textContent = serials.length;
+  renderEditSaleItems();
+}
+
+// ===== DELETE SALE INVOICE (with full inventory + treasury sync) =====
+function deleteSaleInvoice(id) {
+  const inv = DB.saleInvoices.find(i => i.id === id);
+  if (!inv) return;
+  if (!confirm(`⚠️ هل تريد حذف فاتورة البيع #${id} نهائياً؟\n\nسيتم:\n• إعادة السيريالات للمخزون\n• خصم المبلغ من الخزنة\n\nهذا الإجراء لا يمكن التراجع عنه!`)) return;
+
+  // Reverse inventory effects
+  (inv.items || []).forEach(item => {
+    if (item.serials && item.serials.length > 0) {
+      item.serials.forEach(serial => {
+        const s = DB.serials.find(x => x.serial === serial);
+        if (s) { s.status = 'available'; s.saleInvoiceId = null; }
+      });
+    } else if (item.productId) {
+      const prod = DB.products.find(p => p.id === item.productId);
+      if (prod) prod.stockQty = (prod.stockQty || 0) + item.qty;
+    }
+    if (item.productId) addStockMovement(item.productId, 'in', item.qty, `إلغاء فاتورة بيع #${id}`);
+  });
+
+  // Reverse cash entry
+  if (inv.invoiceType === 'cash' && inv.total > 0) {
+    addCashEntry('out', inv.total, inv.payment || 'cash', `إلغاء فاتورة بيع #${id} - ${inv.customer}`);
+  }
+
+  // Remove the invoice
+  DB.saleInvoices = DB.saleInvoices.filter(i => i.id !== id);
+  logActivity('حذف فاتورة بيع', `#${id} - ${inv.customer} - ${formatMoney(inv.total)}`);
+  saveDB();
+  renderInvoices();
+  renderTreasury();
+  showToast(`✅ تم حذف الفاتورة #${id} والمخزون والخزنة تم تحديثهم`);
+}
+
+// ===== DELETE PURCHASE INVOICE (with full inventory + treasury sync) =====
+function deletePurchaseInvoice(id) {
+  const inv = DB.purchaseInvoices.find(p => p.id === id);
+  if (!inv) return;
+  if (!confirm(`⚠️ هل تريد حذف فاتورة الشراء #${id} نهائياً؟\n\nسيتم:\n• حذف السيريالات المرتبطة بها\n• إرجاع المبلغ للخزنة\n\nهذا الإجراء لا يمكن التراجع عنه!`)) return;
+
+  // Reverse inventory effects
+  const items = inv.items && inv.items.length > 0 ? inv.items
+    : [{ productId: inv.productId, qty: inv.qty || 1, price: inv.price, serials: [] }];
+
+  items.forEach(item => {
+    if (item.serials && item.serials.length > 0) {
+      DB.serials = DB.serials.filter(s => !(item.serials.includes(s.serial) && s.purchaseInvoiceId === id));
+    } else if (item.productId) {
+      const prod = DB.products.find(p => p.id === item.productId);
+      if (prod) prod.stockQty = Math.max(0, (prod.stockQty || 0) - item.qty);
+    }
+    if (item.productId) addStockMovement(item.productId, 'out', item.qty, `إلغاء فاتورة شراء #${id}`);
+  });
+
+  // Reverse cash entry
+  if (inv.invoiceType === 'cash' && inv.total > 0) {
+    addCashEntry('in', inv.total, inv.paymentMethod || 'cash', `إلغاء فاتورة شراء #${id} - ${inv.supplier || ''}`);
+  }
+
+  // Remove the invoice
+  DB.purchaseInvoices = DB.purchaseInvoices.filter(p => p.id !== id);
+  logActivity('حذف فاتورة شراء', `#${id} - ${inv.supplier || ''} - ${formatMoney(inv.total)}`);
+  saveDB();
+  renderPurchases();
+  renderTreasury();
+  showToast(`✅ تم حذف فاتورة الشراء #${id} والمخزون والخزنة تم تحديثهم`);
+}
+
+// ===== PURCHASE SERIAL SCANNER HELPERS =====
+function updatePurSerialsCount() {
+  const ta = document.getElementById('purSerials');
+  const countEl = document.getElementById('purSerialsCount');
+  if (!ta || !countEl) return;
+  const serials = ta.value.split('\n').map(s => s.trim()).filter(s => s);
+  countEl.textContent = serials.length + ' سيريال';
+  countEl.style.color = serials.length > 0 ? 'var(--green)' : 'var(--accent)';
+}
+
+function purScanSerial(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const scanEl = document.getElementById('purScanInput');
+  const scanned = (scanEl.value || '').trim();
+  if (!scanned) return;
+  const ta = document.getElementById('purSerials');
+  const existing = ta.value.split('\n').map(s => s.trim()).filter(s => s);
+  // Check duplicate in current list
+  if (existing.includes(scanned)) { showToast('❌ السيريال مكرر في القائمة', 'error'); scanEl.value = ''; scanEl.focus(); return; }
+  // Check duplicate in DB
+  if (DB.serials.find(x => x.serial === scanned)) { showToast('❌ السيريال موجود مسبقاً في النظام', 'error'); scanEl.value = ''; scanEl.focus(); return; }
+  existing.push(scanned);
+  ta.value = existing.join('\n');
+  updatePurSerialsCount();
+  scanEl.value = '';
+  scanEl.focus();
+  showToast('✅ ' + scanned, 'success');
+}
+
+function purScanFocus() {
+  const el = document.getElementById('purScanInput');
+  if (el) { el.focus(); el.select(); }
+}
+
+// ===== CUSTOMER SEARCH IN POS CART =====
+function filterCartCustomers(query) {
+  const select = document.getElementById('cartCustomerSelect');
+  const mode = document.getElementById('posModeVal')?.value || 'sale';
+  const q = (query || '').toLowerCase().trim();
+
+  let custList = DB.customers;
+  let suppList = DB.suppliers;
+
+  if (q) {
+    custList = custList.filter(c => c.name.toLowerCase().includes(q) || (c.phone && c.phone.includes(q)) || (c.phone2 && c.phone2.includes(q)));
+    suppList = suppList.filter(s => s.name.toLowerCase().includes(q) || (s.phone && s.phone.includes(q)));
+  }
+
+  const custOptions = custList.map(c => `<option value="c_${c.id}">${c.name}${c.phone ? ' — ' + c.phone : ''}</option>`).join('');
+  const suppOptions = suppList.map(s => `<option value="s_${s.id}">🏭 ${s.name}${s.phone ? ' — ' + s.phone : ''}</option>`).join('');
+
+  if (mode === 'sale') {
+    select.innerHTML = `<option value="">👤 اختر عميل (اختياري)...</option>${custOptions}<optgroup label="── أو مورد ──"></optgroup>${suppOptions}`;
+  } else {
+    select.innerHTML = `<option value="">🏭 اختر مورد / عميل (اختياري)...</option>${suppOptions}<optgroup label="── أو عميل ──"></optgroup>${custOptions}`;
+  }
 }
 
 function saveEditSaleInvoice() {
@@ -6673,8 +6970,34 @@ function saveEditSaleInvoice() {
   const subtotal = editSaleInvItems.reduce((s, i) => s + (i.price * i.qty), 0);
   const newTotal = subtotal - discount;
   const newProfit = editSaleInvItems.reduce((s, i) => s + ((i.price - (i.buyPrice || 0)) * i.qty), 0) - discount;
-
   const oldTotal = inv.total;
+
+  // ===== REVERSE OLD INVENTORY EFFECTS =====
+  const oldItems = inv.items || [];
+  oldItems.forEach(item => {
+    if (item.serials && item.serials.length > 0) {
+      item.serials.forEach(serial => {
+        const s = DB.serials.find(x => x.serial === serial);
+        if (s) { s.status = 'available'; s.saleInvoiceId = null; }
+      });
+    } else if (item.productId) {
+      const prod = DB.products.find(p => p.id === item.productId);
+      if (prod) prod.stockQty = (prod.stockQty || 0) + item.qty;
+    }
+  });
+
+  // ===== APPLY NEW INVENTORY EFFECTS =====
+  editSaleInvItems.forEach(item => {
+    if (item.serials && item.serials.length > 0) {
+      item.serials.forEach(serial => {
+        const s = DB.serials.find(x => x.serial === serial);
+        if (s) { s.status = 'sold'; s.saleInvoiceId = id; }
+      });
+    } else if (item.productId) {
+      const prod = DB.products.find(p => p.id === item.productId);
+      if (prod) prod.stockQty = Math.max(0, (prod.stockQty || 0) - item.qty);
+    }
+  });
 
   inv.customer = document.getElementById('editSaleInvCustomer').value.trim() || inv.customer;
   inv.customerPhone = document.getElementById('editSaleInvPhone').value.trim();
@@ -6696,11 +7019,12 @@ function saveEditSaleInvoice() {
     else addCashEntry('out', Math.abs(diff), inv.payment || 'cash', `تعديل فاتورة #${id} - فرق مبلغ`);
   }
 
-  logActivity('تعديل فاتورة بيع كامل', `#${id} - ${inv.customer} - ${formatMoney(newTotal)}`);
+  logActivity('تعديل فاتورة بيع كامل', `#${id} - ${inv.customer} - ${formatMoney(newTotal)} — المخزون والخزنة تم تحديثهم`);
   saveDB();
   closeModal('editSaleInvoiceModal');
   renderInvoices();
-  showToast(`✅ تم تعديل فاتورة البيع #${id}`);
+  renderTreasury();
+  showToast(`✅ تم تعديل فاتورة البيع #${id} والمخزون والخزنة`);
   editSaleInvItems = [];
 }
 
