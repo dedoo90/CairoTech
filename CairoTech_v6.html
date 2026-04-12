@@ -608,7 +608,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div class="form-group">
       <label>🗄️ Gist ID <span style="color:var(--text2);font-size:0.72rem">(اتركه فارغاً لإنشاء gist جديد تلقائياً)</span></label>
       <input type="text" id="frGistInput" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style="direction:ltr;font-family:monospace;font-size:0.85rem" autocomplete="off">
-      <div style="font-size:0.7rem;color:var(--text2);margin-top:4px">لو عندك بيانات محفوظة على GitHub من جهاز آخر، أدخل الـ Gist ID هنا لاستعادتها</div>
+      <div style="font-size:0.7rem;color:var(--text2);margin-top:4px">اختياري: يمكنك إدخال Gist ID يدوياً، أو الاكتفاء بالـ Token وسيتم اكتشافه تلقائياً</div>
     </div>
 
     <div id="frStatus" style="font-size:0.82rem;min-height:24px;margin-bottom:12px;text-align:center;padding:6px;border-radius:8px;display:none"></div>
@@ -1564,7 +1564,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
           <input type="text" id="syncGistInput" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             style="direction:ltr;font-family:monospace;font-size:0.85rem" autocomplete="off">
           <div style="font-size:0.72rem;color:var(--text2);margin-top:4px">
-            💡 لو عندك Gist موجود من جهاز تاني الصق الـ ID هنا للمزامنة معاه
+            💡 اختياري: اتركه فارغاً وسيتم العثور على Gist تلقائياً من نفس الحساب
           </div>
         </div>
         <div id="syncSetupMsg" style="font-size:0.82rem;min-height:20px;margin-bottom:10px;color:var(--accent)"></div>
@@ -1606,7 +1606,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
           2️⃣ Settings → Developer Settings → Personal access tokens → Tokens (classic)<br>
           3️⃣ اضغط <strong>Generate new token</strong> → ضع وصف → اختر صلاحية <strong>gist</strong> فقط<br>
           4️⃣ انسخ الـ Token والصقه في الخانة فوق ← اضغط <strong>ربط وتفعيل</strong><br>
-          5️⃣ انسخ الـ <strong>Gist ID</strong> اللي هيظهر وأدخله على باقي الأجهزة<br>
+          5️⃣ على أي جهاز جديد: فقط أدخل نفس <strong>Token</strong> وسيتم جلب نفس البيانات تلقائياً<br>
           ✅ من الآن كل تغيير هيتزامن تلقائياً على كل الأجهزة!
         </div>
       </div>
@@ -1625,7 +1625,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-accent" onclick="showPage('sync')">⚙️ إعدادات GitHub</button>
-          <button class="btn btn-green" id="btnPullNow" onclick="ghPullNow()" style="display:none">📥 استعادة الآن من GitHub</button>
+          <button class="btn btn-green" id="btnPullNow" onclick="ghPullNow()">📥 استعادة الآن من GitHub</button>
           <button class="btn btn-outline" id="btnPushNow" onclick="ghPushNow()" style="display:none">📤 حفظ الآن على GitHub</button>
         </div>
       </div>
@@ -2677,6 +2677,7 @@ function applyPermissions() {
 const GH_TOKEN_KEY = 'digi_gh_token';
 const GH_GIST_KEY  = 'digi_gh_gist_id';
 const GH_FILENAME  = 'digitronics_db.json';
+const GH_GIST_DESC = 'DigiTronics Database';
 let ghPendingSave  = false;
 let ghSyncing      = false;
 let ghLastSaved    = null;
@@ -2684,6 +2685,64 @@ let ghLastSaved    = null;
 function ghToken()  { return localStorage.getItem(GH_TOKEN_KEY) || ''; }
 function ghGistId() { return localStorage.getItem(GH_GIST_KEY)  || ''; }
 function ghHeaders(){ return { 'Authorization':'token '+ghToken(), 'Content-Type':'application/json', 'Accept':'application/vnd.github+json' }; }
+
+function ghHeadersFromToken(token){
+  return {
+    'Authorization':'token '+token,
+    'Content-Type':'application/json',
+    'Accept':'application/vnd.github+json'
+  };
+}
+
+async function ghFindExistingGistByToken(token){
+  if (!token) return '';
+  const headers = ghHeadersFromToken(token);
+  for (let page = 1; page <= 5; page++) {
+    const r = await fetch('https://api.github.com/gists?per_page=100&page='+page, { headers, cache:'no-store' });
+    if (!r.ok) throw new Error('فشل قراءة Gists ('+r.status+')');
+    const gists = await r.json();
+    if (!Array.isArray(gists) || gists.length === 0) break;
+    const found = gists.find(g => g?.files?.[GH_FILENAME]);
+    if (found?.id) return found.id;
+  }
+  return '';
+}
+
+async function ghCreateNewGistForToken(token){
+  const headers = ghHeadersFromToken(token);
+  const gr = await fetch('https://api.github.com/gists',{
+    method:'POST',
+    headers,
+    body:JSON.stringify({
+      description: GH_GIST_DESC,
+      public:false,
+      files:{[GH_FILENAME]:{content:JSON.stringify(DB)}}
+    })
+  });
+  if (!gr.ok) throw new Error('فشل إنشاء Gist ('+gr.status+')');
+  const gd = await gr.json();
+  if (!gd?.id) throw new Error('تعذر الحصول على Gist ID');
+  return gd.id;
+}
+
+async function ghEnsureGistForToken(token, preferredGistId=''){
+  if (!token) throw new Error('Token مطلوب');
+  const cleanPreferred = (preferredGistId || '').trim();
+  if (cleanPreferred) {
+    localStorage.setItem(GH_GIST_KEY, cleanPreferred);
+    return cleanPreferred;
+  }
+  const localGist = ghGistId();
+  if (localGist) return localGist;
+  const existing = await ghFindExistingGistByToken(token);
+  if (existing) {
+    localStorage.setItem(GH_GIST_KEY, existing);
+    return existing;
+  }
+  const created = await ghCreateNewGistForToken(token);
+  localStorage.setItem(GH_GIST_KEY, created);
+  return created;
+}
 
 function showPill(msg, ms=0) {
   let el = document.getElementById('syncPill');
@@ -2710,7 +2769,7 @@ function updateGhStatusCard() {
     if(gDisp) gDisp.style.display=''; if(gShow) gShow.textContent=ghGistId();
   } else {
     icon.textContent='☁️'; title.textContent='GitHub غير مفعّل'; sub.textContent='البيانات محفوظة محلياً فقط';
-    if(bPull) bPull.style.display='none'; if(bPush) bPush.style.display='none';
+    if(bPull) bPull.style.display=''; if(bPush) bPush.style.display='none';
     if(gDisp) gDisp.style.display='none';
   }
 }
@@ -2784,7 +2843,7 @@ async function ghPush(silent=false, retries=2) {
   ghSyncing=false;
 }
 
-async function ghPullNow() { const ok=await ghPull(false); if(ok){initApp();} }
+async function ghPullNow() { await backupGhRestore(); }
 async function ghPushNow() { await ghPush(false); }
 function copyGistId() { navigator.clipboard.writeText(ghGistId()).then(()=>showPill('✅ تم النسخ',2000)); }
 
@@ -2810,6 +2869,24 @@ function checkFirstRun() {
   }
 }
 
+async function autoPrepareGithubSync() {
+  const token = ghToken();
+  if (!token) return;
+  try {
+    if (!ghGistId()) {
+      await ghEnsureGistForToken(token);
+    }
+    if (ghGistId()) {
+      await ghPull(true);
+    }
+  } catch (e) {
+    console.warn('autoPrepareGithubSync', e);
+  } finally {
+    updateGhStatusCard();
+    try { renderSyncPage(); } catch(e) {}
+  }
+}
+
 function frSetStatus(msg, color='var(--accent)', bg='rgba(0,102,255,.08)') {
   const s = document.getElementById('frStatus');
   if (!s) return;
@@ -2827,27 +2904,26 @@ async function frConnect() {
     const r = await fetch('https://api.github.com/user', {headers:{'Authorization':'token '+token}});
     if (!r.ok) throw new Error('Token غير صالح ('+r.status+')');
     const ud = await r.json();
+    if (ghToken() && ghToken() !== token) localStorage.removeItem(GH_GIST_KEY);
     localStorage.setItem(GH_TOKEN_KEY, token);
     frSetStatus('✅ مرحباً '+(ud.name||ud.login)+'!', 'var(--green)', 'rgba(0,168,84,.08)');
-    if (gistId) {
-      localStorage.setItem(GH_GIST_KEY, gistId);
-      frSetStatus('⏳ جاري استعادة البيانات من GitHub...', 'var(--accent)', 'rgba(0,102,255,.08)');
-      const ok = await ghPull(true);
-      frSetStatus(ok ? '✅ تم ربط الحساب واستعادة البيانات بنجاح!' : '⚠️ تم حفظ الإعدادات — تعذّر جلب Gist', ok?'var(--green)':'var(--yellow)', ok?'rgba(0,168,84,.08)':'rgba(249,168,37,.08)');
-    } else {
-      frSetStatus('⏳ جاري إنشاء Gist جديد...', 'var(--accent)', 'rgba(0,102,255,.08)');
-      const gr = await fetch('https://api.github.com/gists',{
-        method:'POST', headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github+json'},
-        body:JSON.stringify({description:'DigiTronics Database',public:false,files:{[GH_FILENAME]:{content:JSON.stringify(DB)}}})
-      });
-      if (!gr.ok) throw new Error('فشل إنشاء Gist ('+gr.status+')');
-      const gd = await gr.json();
-      localStorage.setItem(GH_GIST_KEY, gd.id);
-      frSetStatus('✅ تم إنشاء Gist جديد! ID: '+gd.id, 'var(--green)', 'rgba(0,168,84,.08)');
-    }
+    frSetStatus('⏳ جاري تجهيز المزامنة على GitHub...', 'var(--accent)', 'rgba(0,102,255,.08)');
+    const finalGistId = await ghEnsureGistForToken(token, gistId);
+    localStorage.setItem(GH_GIST_KEY, finalGistId);
+    frSetStatus('⏳ جاري استعادة البيانات من GitHub...', 'var(--accent)', 'rgba(0,102,255,.08)');
+    const ok = await ghPull(true);
+    frSetStatus(
+      ok
+        ? '✅ تم ربط الحساب واستعادة البيانات بنجاح!'
+        : '✅ تم حفظ الإعدادات وتفعيل المزامنة. سيتم الجلب تلقائياً عند توفر بيانات سحابية.',
+      ok ? 'var(--green)' : 'var(--yellow)',
+      ok ? 'rgba(0,168,84,.08)' : 'rgba(249,168,37,.08)'
+    );
     setTimeout(() => {
       document.getElementById('firstRunModal').style.display = 'none';
       updateGhStatusCard();
+      renderSyncPage();
+      if (ok) initApp();
     }, 2000);
   } catch(e) {
     frSetStatus('❌ '+e.message, 'var(--red)', 'rgba(229,57,53,.08)');
@@ -9290,7 +9366,7 @@ function renderSyncPage() {
   const gInput = document.getElementById('syncGistInput');
 
   if(icon)  icon.textContent  = connected ? '✅' : hasToken ? '⚠️' : '☁️';
-  if(title) title.textContent = connected ? 'متصل بـ GitHub — مزامنة كل 3 ثواني 🟢' : hasToken ? 'Token مُدخل — أضف Gist ID' : 'غير مفعّل';
+  if(title) title.textContent = connected ? 'متصل بـ GitHub — مزامنة كل 3 ثواني 🟢' : hasToken ? 'Token مُدخل — جاري تجهيز المزامنة' : 'غير مفعّل';
   if(sub)   sub.textContent   = connected
     ? (ghLastSaved ? 'آخر حفظ: '+ghLastSaved.toLocaleTimeString('ar-EG') : 'بانتظار أول تغيير...')
     : 'أدخل بيانات GitHub للمزامنة بين أجهزتك';
@@ -9307,30 +9383,21 @@ async function syncPageConnect() {
   const msg    = document.getElementById('syncSetupMsg');
   if (!token) { msg.textContent='❌ أدخل الـ Token أولاً'; msg.style.color='var(--red)'; return; }
   msg.textContent='⏳ جاري التحقق...'; msg.style.color='var(--accent)';
-  localStorage.setItem(GH_TOKEN_KEY, token);
   try {
     const r = await fetch('https://api.github.com/user',{headers:{'Authorization':'token '+token}});
     if (!r.ok) throw new Error('Token غير صالح ('+r.status+')');
     const ud = await r.json();
+    if (ghToken() && ghToken() !== token) localStorage.removeItem(GH_GIST_KEY);
+    localStorage.setItem(GH_TOKEN_KEY, token);
     msg.textContent = '✅ مرحباً '+(ud.name||ud.login)+'!';
-    if (gistId) {
-      localStorage.setItem(GH_GIST_KEY, gistId);
-      msg.textContent += ' — جاري استعادة البيانات...';
-      const ok = await ghPull(true);
-      msg.textContent = ok ? '✅ تم الربط واستعادة البيانات بنجاح!' : '⚠️ تم حفظ الإعدادات لكن تعذّر جلب البيانات';
-      if (ok) { initApp(); showToast('✅ تم جلب البيانات من GitHub'); }
-    } else {
-      msg.textContent += ' — جاري إنشاء Gist جديد...';
-      const gr = await fetch('https://api.github.com/gists',{
-        method:'POST',headers:ghHeaders(),
-        body:JSON.stringify({description:'DigiTronics Database',public:false,files:{[GH_FILENAME]:{content:JSON.stringify(DB)}}})
-      });
-      if (!gr.ok) throw new Error('فشل إنشاء Gist ('+gr.status+')');
-      const gd = await gr.json();
-      localStorage.setItem(GH_GIST_KEY, gd.id);
-      msg.textContent = '✅ تم إنشاء Gist جديد! انسخ الـ ID وأدخله على باقي الأجهزة';
-      msg.style.color = 'var(--green)';
-    }
+    msg.textContent += ' — جاري تجهيز المزامنة...';
+    const finalGistId = await ghEnsureGistForToken(token, gistId);
+    localStorage.setItem(GH_GIST_KEY, finalGistId);
+    msg.textContent = '⏳ جاري استعادة البيانات...';
+    const ok = await ghPull(true);
+    msg.textContent = ok ? '✅ تم الربط واستعادة البيانات بنجاح!' : '✅ تم تفعيل المزامنة. سيتم الجلب تلقائياً عند توفر بيانات سحابية.';
+    msg.style.color = ok ? 'var(--green)' : 'var(--yellow)';
+    if (ok) { initApp(); showToast('✅ تم جلب البيانات من GitHub'); }
     renderSyncPage();
     updateGhStatusCard();
   } catch(e) {
@@ -9449,6 +9516,7 @@ showPage('dashboard');
 setTimeout(updateGhStatusCard, 0);
 // أول تشغيل: لو مافيش Token محفوظ → اعرض modal الربط
 setTimeout(checkFirstRun, 300);
+setTimeout(() => { autoPrepareGithubSync(); }, 400);
 
 </script>
 </body>
