@@ -3807,12 +3807,12 @@ function updatePurchaseInvoice(id) {
     addStockMovement(item.productId, 'out', item.qty, `إلغاء شراء قديم - فاتورة ${id}`);
   });
 
-  // Reverse old cash entry if cash invoice
+  // Reverse old cash entry if cash invoice — use OLD payment method
   if (inv.invoiceType === 'cash' && oldTotal > 0) {
-    addCashEntry('in', oldTotal, inv.paymentMethod || 'cash', `إلغاء مشتريات قديمة - فاتورة ${id}`);
+    addCashEntry('in', oldTotal, inv.paymentMethod || 'cash', `إلغاء دفعة قديمة - فاتورة شراء ${id}`);
   }
 
-  // ===== APPLY NEW INVOICE EFFECTS =====
+  // Apply new inventory effects
   purCart.forEach(item => {
     const prod = DB.products.find(p => p.id === item.productId);
     if (item.noSerial) {
@@ -3825,7 +3825,7 @@ function updatePurchaseInvoice(id) {
     addStockMovement(item.productId, 'in', item.qty, `تحديث شراء - فاتورة ${id}`);
   });
 
-  // Add new cash entry if cash invoice
+  // Add new cash entry — use NEW payment method
   if (invoiceType === 'cash' && newTotal > 0) {
     addCashEntry('out', newTotal, paymentMethod, `شراء محدّث - فاتورة ${id} - ${supplierName || 'مورد'}`);
   }
@@ -6999,10 +6999,25 @@ function saveEditSaleInvoice() {
     }
   });
 
+  // ===== TREASURY SYNC (handles payment method change + amount change) =====
+  const oldPayment = inv.payment;
+  const oldInvoiceType = inv.invoiceType;
+  const newPayment = document.getElementById('editSaleInvPayment').value;
+  const newInvoiceType = document.getElementById('editSaleInvType').value;
+
+  // Reverse old cash entry if old invoice was cash
+  if (oldInvoiceType !== 'ajel' && oldTotal > 0) {
+    addCashEntry('out', oldTotal, oldPayment || 'cash', `إلغاء دفعة قديمة - فاتورة بيع #${id}`);
+  }
+  // Apply new cash entry if new invoice is cash
+  if (newInvoiceType !== 'ajel' && newTotal > 0) {
+    addCashEntry('in', newTotal, newPayment || 'cash', `دفعة جديدة - تعديل فاتورة بيع #${id}`);
+  }
+
   inv.customer = document.getElementById('editSaleInvCustomer').value.trim() || inv.customer;
   inv.customerPhone = document.getElementById('editSaleInvPhone').value.trim();
-  inv.invoiceType = document.getElementById('editSaleInvType').value;
-  inv.payment = document.getElementById('editSaleInvPayment').value;
+  inv.invoiceType = newInvoiceType;
+  inv.payment = newPayment;
   inv.discount = discount;
   inv.note = document.getElementById('editSaleInvNote').value.trim();
   inv.items = editSaleInvItems.map(i => ({ ...i }));
@@ -7012,14 +7027,7 @@ function saveEditSaleInvoice() {
   inv.editedAt = new Date().toISOString();
   inv.editedBy = currentUser ? currentUser.username : 'system';
 
-  // Adjust cashFlow if total changed and it's a cash invoice
-  if (inv.payment !== 'ajel' && Math.abs(newTotal - oldTotal) > 0.01) {
-    const diff = newTotal - oldTotal;
-    if (diff > 0) addCashEntry('in', diff, inv.payment || 'cash', `تعديل فاتورة #${id} - فرق مبلغ`);
-    else addCashEntry('out', Math.abs(diff), inv.payment || 'cash', `تعديل فاتورة #${id} - فرق مبلغ`);
-  }
-
-  logActivity('تعديل فاتورة بيع كامل', `#${id} - ${inv.customer} - ${formatMoney(newTotal)} — المخزون والخزنة تم تحديثهم`);
+  logActivity('تعديل فاتورة بيع كامل', `#${id} - ${inv.customer} - ${formatMoney(newTotal)} — خزنة ${newPayment} — المخزون والخزنة تم تحديثهم`);
   saveDB();
   closeModal('editSaleInvoiceModal');
   renderInvoices();
