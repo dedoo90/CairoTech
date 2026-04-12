@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title DigiTronics - نظام الإدارة الاحترافي
+title CairoTech - نظام الإدارة الاحترافي
 
 set "DTDIR=%USERPROFILE%\Documents\DigiTronics"
 if not exist "%DTDIR%" mkdir "%DTDIR%"
