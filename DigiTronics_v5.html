@@ -42,32 +42,220 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 /* APP */
 #app{display:none;}
-.sidebar{position:fixed;top:0;right:0;width:70px;height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:100;transition:width .3s;overflow:hidden;-webkit-overflow-scrolling:touch;align-items:center;padding:12px 0;}
-.sidebar.expanded{width:280px;align-items:flex-start;overflow-y:auto;}
-.sidebar-logo{padding:12px 16px;font-size:1.2rem;font-weight:900;color:var(--accent);text-shadow:0 0 20px rgba(0,212,255,0.4);display:none;border-bottom:1px solid var(--border);width:100%;}
+
+/* ===== LIQUID GLASS SIDEBAR ===== */
+.sidebar{
+  position:fixed;top:0;right:0;width:76px;height:100vh;
+  display:flex;flex-direction:column;z-index:100;
+  transition:width .35s cubic-bezier(.4,0,.2,1);
+  overflow:hidden;-webkit-overflow-scrolling:touch;
+  align-items:center;padding:14px 0;
+
+  /* Liquid Glass Core */
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-left: 1px solid rgba(255,255,255,0.22);
+  box-shadow:
+    -8px 0 32px rgba(0,0,0,0.12),
+    inset 1px 0 0 rgba(255,255,255,0.35);
+}
+/* Glossy top sheen */
+.sidebar::before{
+  content:'';position:absolute;top:0;right:0;left:0;height:50%;
+  background:linear-gradient(180deg,rgba(255,255,255,0.18) 0%,rgba(255,255,255,0) 100%);
+  border-radius:inherit;pointer-events:none;z-index:0;
+}
+.sidebar.expanded{width:285px;align-items:flex-start;overflow-y:auto;}
+
+[data-theme="dark"] .sidebar{
+  background: rgba(15,17,30,0.55);
+  border-left: 1px solid rgba(255,255,255,0.10);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.45), inset 1px 0 0 rgba(255,255,255,0.08);
+}
+[data-theme="dark"] .sidebar::before{
+  background:linear-gradient(180deg,rgba(255,255,255,0.07) 0%,rgba(255,255,255,0) 100%);
+}
+
+/* Sidebar Logo */
+.sidebar-logo{
+  padding:14px 16px;font-size:1.15rem;font-weight:900;
+  color:var(--accent);text-shadow:0 0 20px rgba(0,102,255,0.5);
+  display:none;border-bottom:1px solid rgba(255,255,255,0.15);
+  width:100%;position:relative;z-index:1;
+}
 .sidebar.expanded .sidebar-logo{display:flex;align-items:center;gap:8px;}
-.nav-icon-btn{width:50px;height:50px;border-radius:12px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.5rem;transition:all .2s;margin-bottom:8px;position:relative;color:var(--text2);}
-.nav-icon-btn:hover{background:var(--surface2);color:var(--accent);}
-.nav-icon-btn.active{background:rgba(0,102,255,0.1);color:var(--accent);}
-.nav-dropdown{display:none;position:fixed;top:0;right:70px;width:210px;max-height:100vh;background:var(--surface);border-left:1px solid var(--border);box-shadow:-4px 0 20px rgba(0,0,0,0.1);overflow-y:auto;z-index:99;-webkit-overflow-scrolling:touch;}
+
+/* Nav Icon Buttons — iOS Dock style */
+.nav-icon-btn{
+  width:50px;height:50px;
+  border-radius:14px;border:none;background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:1.55rem;
+  margin-bottom:6px;position:relative;z-index:1;
+  color:rgba(255,255,255,0.75);
+  transition: transform .22s cubic-bezier(.34,1.56,.64,1), background .2s, box-shadow .2s;
+  transform-origin: center bottom;
+  -webkit-tap-highlight-color:transparent;
+}
+.nav-icon-btn:hover{
+  transform: scale(1.22) translateY(-3px);
+  background: rgba(255,255,255,0.22);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.45);
+  color:#fff;
+}
+.nav-icon-btn:active{ transform: scale(1.05); }
+.nav-icon-btn.active{
+  background: rgba(0,102,255,0.28);
+  box-shadow: 0 4px 16px rgba(0,102,255,0.35), inset 0 1px 0 rgba(255,255,255,0.4);
+  color:#fff;
+}
+[data-theme="dark"] .nav-icon-btn{ color:rgba(255,255,255,0.6); }
+[data-theme="dark"] .nav-icon-btn:hover{ background:rgba(255,255,255,0.12); }
+
+/* Neighbour scaling effect — CSS-only approximation */
+.sidebar:hover .nav-icon-btn:not(:hover){ transform:scale(0.95); }
+.sidebar:hover .nav-icon-btn:hover{ transform:scale(1.22) translateY(-3px); }
+
+/* Tooltip label */
+.nav-icon-btn::after{
+  content:attr(title);
+  position:absolute;right:calc(100% + 10px);
+  background:rgba(0,0,0,0.75);
+  backdrop-filter:blur(10px);
+  color:#fff;font-size:0.72rem;font-family:'Cairo',sans-serif;font-weight:600;
+  padding:4px 10px;border-radius:8px;white-space:nowrap;
+  opacity:0;pointer-events:none;
+  transform:translateX(6px);
+  transition:opacity .18s,transform .18s;
+  border:1px solid rgba(255,255,255,0.15);
+}
+.nav-icon-btn:hover::after{ opacity:1; transform:translateX(0); }
+.sidebar.expanded .nav-icon-btn::after{ display:none; }
+
+/* Nav Dropdown — Glass panel */
+.nav-dropdown{
+  display:none;position:fixed;top:0;right:76px;width:215px;max-height:100vh;
+  overflow-y:auto;z-index:99;-webkit-overflow-scrolling:touch;
+
+  background:rgba(255,255,255,0.18);
+  backdrop-filter:blur(30px) saturate(180%);
+  -webkit-backdrop-filter:blur(30px) saturate(180%);
+  border-left:1px solid rgba(255,255,255,0.25);
+  box-shadow:-6px 0 28px rgba(0,0,0,0.14), inset 1px 0 0 rgba(255,255,255,0.3);
+}
 .nav-dropdown.show{display:flex;flex-direction:column;}
-.nav-dropdown-header{padding:16px;border-bottom:1px solid var(--border);font-size:0.9rem;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:8px;}
-.nav-dropdown-item{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;color:var(--text2);font-size:0.85rem;font-weight:600;transition:all .2s;border-right:3px solid transparent;}
-.nav-dropdown-item:hover{background:var(--surface2);color:var(--text);}
-.nav-dropdown-item.active{color:var(--accent);border-right-color:var(--accent);background:rgba(0,212,255,0.05);}
+[data-theme="dark"] .nav-dropdown{
+  background:rgba(20,22,40,0.7);
+  border-left:1px solid rgba(255,255,255,0.10);
+  box-shadow:-6px 0 28px rgba(0,0,0,0.5);
+}
+
+.nav-dropdown-header{
+  padding:16px;border-bottom:1px solid rgba(255,255,255,0.15);
+  font-size:0.9rem;font-weight:700;color:var(--accent);
+  display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.06);
+}
+.nav-dropdown-item{
+  display:flex;align-items:center;gap:10px;padding:12px 16px;
+  cursor:pointer;color:var(--text2);font-size:0.85rem;font-weight:600;
+  transition:all .18s;border-right:3px solid transparent;
+}
+.nav-dropdown-item:hover{
+  background:rgba(255,255,255,0.14);color:var(--text);
+  border-right-color:rgba(0,102,255,0.5);
+  transform:translateX(-2px);
+}
+.nav-dropdown-item.active{
+  color:var(--accent);border-right-color:var(--accent);
+  background:rgba(0,102,255,0.10);
+}
 .nav-dropdown-item .icon{font-size:1rem;width:20px;text-align:center;}
-.sidebar-footer{padding:12px;border-top:1px solid var(--border);margin-top:auto;width:100%;display:flex;justify-content:center;}
-.sidebar.expanded .sidebar-footer{justify-content:flex-start;padding:12px 14px;}
-.user-badge{display:none;align-items:center;gap:8px;margin-bottom:8px;}
+
+/* Sidebar Footer */
+.sidebar-footer{
+  padding:10px;border-top:1px solid rgba(255,255,255,0.15);
+  margin-top:auto;width:100%;display:flex;
+  justify-content:center;flex-direction:column;align-items:center;gap:6px;
+  position:relative;z-index:1;
+}
+.sidebar.expanded .sidebar-footer{align-items:flex-start;padding:12px 14px;}
+
+.user-badge{display:none;align-items:center;gap:8px;margin-bottom:4px;}
 .sidebar.expanded .user-badge{display:flex;}
-.avatar{width:40px;height:40px;background:linear-gradient(135deg,var(--accent2),var(--accent));border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem;color:#fff;flex-shrink:0;cursor:pointer;transition:transform .2s;}
-.avatar:hover{transform:scale(1.05);}
-.btn-logout{width:100%;background:rgba(255,82,82,0.1);color:var(--red);border:1px solid rgba(255,82,82,0.3);border-radius:8px;padding:8px;font-family:'Cairo',sans-serif;font-size:0.8rem;cursor:pointer;transition:background .2s;display:none;}
-.sidebar.expanded .btn-logout{display:block;}
-.main-content{margin-right:70px;min-height:100vh;padding:16px;transition:margin-right .3s;}
-.main-content.expanded{margin-right:280px;}
-.hamburger{display:none;position:fixed;top:12px;left:12px;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:1.1rem;color:var(--accent);}
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:90;}
+.avatar{
+  width:40px;height:40px;
+  background:linear-gradient(135deg,var(--accent2),var(--accent));
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:0.85rem;color:#fff;flex-shrink:0;
+  cursor:pointer;
+  transition:transform .22s cubic-bezier(.34,1.56,.64,1), box-shadow .2s;
+  box-shadow:0 3px 12px rgba(0,102,255,0.35);
+}
+.avatar:hover{ transform:scale(1.12); box-shadow:0 6px 20px rgba(0,102,255,0.5); }
+
+/* Glass action buttons in footer */
+.sidebar-action-btn{
+  width:50px;height:50px;border:none;border-radius:14px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.3rem;cursor:pointer;
+  background:rgba(255,255,255,0.15);
+  color:rgba(255,255,255,0.8);
+  transition:transform .22s cubic-bezier(.34,1.56,.64,1), background .2s, box-shadow .2s;
+  font-family:'Cairo',sans-serif;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 2px 8px rgba(0,0,0,0.1);
+  position:relative;
+}
+.sidebar-action-btn:hover{
+  transform:scale(1.18) translateY(-2px);
+  background:rgba(255,255,255,0.28);
+  box-shadow:0 8px 20px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.5);
+  color:#fff;
+}
+.sidebar-action-btn:active{ transform:scale(1.05); }
+.sidebar-action-btn::after{
+  content:attr(title);
+  position:absolute;right:calc(100% + 10px);
+  background:rgba(0,0,0,0.75);backdrop-filter:blur(10px);
+  color:#fff;font-size:0.72rem;font-family:'Cairo',sans-serif;font-weight:600;
+  padding:4px 10px;border-radius:8px;white-space:nowrap;
+  opacity:0;pointer-events:none;transform:translateX(6px);
+  transition:opacity .18s,transform .18s;
+  border:1px solid rgba(255,255,255,0.15);
+}
+.sidebar-action-btn:hover::after{ opacity:1; transform:translateX(0); }
+.sidebar.expanded .sidebar-action-btn{ width:100%;border-radius:10px;justify-content:flex-start;padding:0 12px;gap:10px;font-size:1rem; }
+.sidebar.expanded .sidebar-action-btn::after{ display:none; }
+.sidebar.expanded .sidebar-action-btn .btn-label{ display:inline; }
+.sidebar-action-btn .btn-label{ display:none;font-size:0.82rem;font-weight:600; }
+
+/* Logout button variant */
+.sidebar-action-btn.logout-btn{ background:rgba(229,57,53,0.18);color:rgba(255,120,120,0.9); }
+.sidebar-action-btn.logout-btn:hover{ background:rgba(229,57,53,0.35);color:#fff; box-shadow:0 8px 20px rgba(229,57,53,0.3); }
+
+/* Moon/Sun toggle icon */
+.theme-icon-moon, .theme-icon-sun{ display:inline; }
+.sidebar-action-btn.save-btn{ background:rgba(0,168,84,0.2);color:rgba(100,255,180,0.9); }
+.sidebar-action-btn.save-btn:hover{ background:rgba(0,168,84,0.35);color:#fff;box-shadow:0 8px 20px rgba(0,168,84,0.3); }
+
+/* Btn-logout legacy compat */
+.btn-logout{display:none;}
+
+/* Main content */
+.main-content{margin-right:76px;min-height:100vh;padding:16px;transition:margin-right .35s cubic-bezier(.4,0,.2,1);}
+.main-content.expanded{margin-right:285px;}
+
+/* Hamburger */
+.hamburger{display:none;position:fixed;top:12px;left:12px;z-index:200;
+  background:rgba(255,255,255,0.15);backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,0.25);
+  border-radius:12px;padding:8px 12px;cursor:pointer;font-size:1.1rem;color:var(--accent);
+  transition:transform .2s, background .2s;
+}
+.hamburger:hover{ transform:scale(1.08); background:rgba(255,255,255,0.25); }
+
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);z-index:90;}
 
 /* MOBILE RESPONSIVE */
 @media(max-width:768px){
@@ -75,7 +263,16 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   .hamburger{display:block;}
   .sidebar{width:60px;right:0;transform:translateX(0);}
   .sidebar.expanded{width:280px;}
-  .nav-dropdown{display:none !important;}
+  /* On mobile: dropdowns appear as fullscreen overlay below sidebar */
+  .nav-dropdown{
+    right:0 !important;
+    left:0 !important;
+    width:100vw !important;
+    top:0 !important;
+    padding-top:60px;
+    z-index:98;
+    max-height:100vh;
+  }
   .main-content{margin-right:60px;padding:8px;padding-top:55px;}
   .main-content.expanded{margin-right:280px;}
   .page-title{font-size:1.1rem;}
@@ -127,6 +324,8 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   .product-card .p-name{font-size:0.75rem;}
   .product-card .p-price{font-size:0.85rem;}
 }
+
+@keyframes fadeInUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
 
 /* PAGES */
 .page{display:none;}.page.active{display:block;}
@@ -406,6 +605,38 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 <!-- Sync Status Pill -->
 <div id="syncPill" style="display:none;position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(15,23,42,.9);color:#fff;padding:7px 20px;border-radius:30px;font-size:0.76rem;font-family:'Cairo',sans-serif;z-index:9000;pointer-events:none;white-space:nowrap;transition:opacity .3s"></div>
 
+<!-- ===== FIRST-RUN TOKEN SETUP (يظهر مرة واحدة فقط عند أول تشغيل) ===== -->
+<div id="firstRunModal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:20px;font-family:'Cairo',sans-serif;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:32px 28px;width:100%;max-width:460px;box-shadow:0 0 80px rgba(0,102,255,.25);animation:fadeInUp .4s ease">
+    <div style="text-align:center;margin-bottom:6px;font-size:2rem">☁️</div>
+    <div style="text-align:center;font-size:1.3rem;font-weight:900;color:var(--accent);margin-bottom:4px">ربط المزامنة السحابية</div>
+    <div style="text-align:center;font-size:0.82rem;color:var(--text2);margin-bottom:22px;line-height:1.7">
+      أدخل بيانات GitHub مرة واحدة فقط — سيتم حفظها على هذا الجهاز<br>وستُزامن بياناتك تلقائياً مع كل الأجهزة الأخرى
+    </div>
+
+    <div class="form-group">
+      <label>🔑 GitHub Token <span style="color:var(--red)">*</span></label>
+      <input type="password" id="frTokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="direction:ltr;font-family:monospace;font-size:0.85rem" autocomplete="off">
+      <div style="font-size:0.7rem;color:var(--text2);margin-top:4px;line-height:1.6">
+        github.com → Settings → Developer Settings → Personal access tokens → Tokens (classic) → New → صلاحية <strong>gist</strong> فقط
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>🗄️ Gist ID <span style="color:var(--text2);font-size:0.72rem">(اتركه فارغاً لإنشاء gist جديد تلقائياً)</span></label>
+      <input type="text" id="frGistInput" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style="direction:ltr;font-family:monospace;font-size:0.85rem" autocomplete="off">
+      <div style="font-size:0.7rem;color:var(--text2);margin-top:4px">لو عندك بيانات محفوظة على GitHub من جهاز آخر، أدخل الـ Gist ID هنا لاستعادتها</div>
+    </div>
+
+    <div id="frStatus" style="font-size:0.82rem;min-height:24px;margin-bottom:12px;text-align:center;padding:6px;border-radius:8px;display:none"></div>
+
+    <button class="btn-primary" id="frConnectBtn" onclick="frConnect()">🔗 ربط وحفظ الإعدادات</button>
+    <button onclick="frSkip()" style="width:100%;margin-top:10px;background:transparent;border:1px solid var(--border);border-radius:10px;padding:10px;font-family:'Cairo',sans-serif;cursor:pointer;color:var(--text2);font-size:0.85rem;transition:background .2s" onmouseover="this.style.background='rgba(0,0,0,.05)'" onmouseout="this.style.background='transparent'">
+      استمرار بدون مزامنة (محلي فقط)
+    </button>
+  </div>
+</div>
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-box">
@@ -438,105 +669,119 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div class="sidebar-logo">⚡ CairoTech</div>
     
     <!-- Icon Buttons for Main Categories -->
-    <button class="nav-icon-btn active" onclick="toggleNavDropdown('main')" title="الرئيسية">📊</button>
-    <button class="nav-icon-btn" onclick="toggleNavDropdown('sales')" title="الفواتير والمبيعات">🛒</button>
-    <button class="nav-icon-btn" onclick="toggleNavDropdown('inventory')" title="المخزون">📦</button>
-    <button class="nav-icon-btn" onclick="toggleNavDropdown('reports')" title="التقارير">📈</button>
-    <button class="nav-icon-btn" onclick="toggleNavDropdown('customers')" title="العملاء والموردين">👥</button>
-    <button class="nav-icon-btn" onclick="toggleNavDropdown('admin')" title="الإدارة">⚙️</button>
-    <button class="nav-icon-btn" onclick="toggleNavDropdown('maintenance')" title="الصيانة والضمان">🔧</button>
-    <button class="nav-icon-btn" onclick="toggleNavDropdown('analytics')" title="التحليلات">💡</button>
-    <button class="nav-icon-btn" onclick="toggleNavDropdown('employees')" title="الموظفين">👨‍💼</button>
+    <button class="nav-icon-btn active" onclick="toggleNavDropdown('main', this)" title="الرئيسية">📊</button>
+    <button class="nav-icon-btn" onclick="toggleNavDropdown('sales', this)" title="الفواتير والمبيعات">🛒</button>
+    <button class="nav-icon-btn" onclick="toggleNavDropdown('inventory', this)" title="المخزون">📦</button>
+    <button class="nav-icon-btn" onclick="toggleNavDropdown('reports', this)" title="التقارير">📈</button>
+    <button class="nav-icon-btn" onclick="toggleNavDropdown('customers', this)" title="العملاء والموردين">👥</button>
+    <button class="nav-icon-btn" onclick="toggleNavDropdown('admin', this)" title="الإدارة">⚙️</button>
+    <button class="nav-icon-btn" onclick="toggleNavDropdown('maintenance', this)" title="الصيانة والضمان">🔧</button>
+    <button class="nav-icon-btn" onclick="toggleNavDropdown('analytics', this)" title="التحليلات">💡</button>
+    <button class="nav-icon-btn" onclick="toggleNavDropdown('employees', this)" title="الموظفين">👨‍💼</button>
     
-    <!-- Dropdowns for each category -->
-    <div class="nav-dropdown" id="dropdown-main">
-      <div class="nav-dropdown-header">📊 الرئيسية</div>
-      <div class="nav-dropdown-item" data-page="dashboard"><span class="icon">🏠</span> لوحة التحكم</div>
-      <div class="nav-dropdown-item" data-page="daily"><span class="icon">📅</span> التقرير اليومي</div>
-      <div class="nav-dropdown-item" data-page="serialsearch"><span class="icon">🔍</span> بحث بالسيريال</div>
-      <div class="nav-dropdown-item" data-page="accountstatement"><span class="icon">🪪</span> كشف حساب</div>
-    </div>
-
-    <div class="nav-dropdown" id="dropdown-sales">
-      <div class="nav-dropdown-header">🛒 الفواتير والمبيعات</div>
-      <div class="nav-dropdown-item" data-page="pos"><span class="icon">💳</span> نقطة البيع (POS)</div>
-      <div class="nav-dropdown-item" data-page="invoices"><span class="icon">🧾</span> أرشيف الفواتير</div>
-      <div class="nav-dropdown-item" data-page="installments"><span class="icon">📆</span> التقسيط</div>
-      <div class="nav-dropdown-item" data-page="returns"><span class="icon">↩️</span> المرتجعات</div>
-      <div class="nav-dropdown-item" data-page="quotations"><span class="icon">🏷️</span> عروض الأسعار</div>
-    </div>
-
-    <div class="nav-dropdown" id="dropdown-inventory">
-      <div class="nav-dropdown-header">📦 المخزون</div>
-      <div class="nav-dropdown-item" data-page="products"><span class="icon">📋</span> الأصناف</div>
-      <div class="nav-dropdown-item" data-page="warehouses"><span class="icon">🏭</span> المخازن</div>
-      <div class="nav-dropdown-item" data-page="stockcount"><span class="icon">📊</span> الجرد الكامل</div>
-      <div class="nav-dropdown-item" data-page="stocktransfer"><span class="icon">🔀</span> تحويل مخزن</div>
-      <div class="nav-dropdown-item" data-page="stockmovement"><span class="icon">🔄</span> حركة المخزون</div>
-      <div class="nav-dropdown-item" data-page="purchases"><span class="icon">🛍️</span> فواتير المشتريات</div>
-    </div>
-
-    <div class="nav-dropdown" id="dropdown-reports">
-      <div class="nav-dropdown-header">📈 التقارير</div>
-      <div class="nav-dropdown-item" data-page="reports"><span class="icon">📊</span> تقرير المبيعات</div>
-      <div class="nav-dropdown-item" data-page="financial"><span class="icon">💰</span> الأرباح والخسائر</div>
-      <div class="nav-dropdown-item" data-page="treasury"><span class="icon">🏦</span> الخزنة</div>
-      <div class="nav-dropdown-item" data-page="vouchers"><span class="icon">📄</span> سندات القبض والصرف</div>
-      <div class="nav-dropdown-item" data-page="expenses"><span class="icon">💸</span> المصروفات</div>
-    </div>
-
-    <div class="nav-dropdown" id="dropdown-customers">
-      <div class="nav-dropdown-header">👥 العملاء والموردين</div>
-      <div class="nav-dropdown-item" data-page="customers"><span class="icon">👤</span> العملاء</div>
-      <div class="nav-dropdown-item" data-page="suppliers"><span class="icon">🤝</span> الموردين</div>
-      <div class="nav-dropdown-item" data-page="customer-statement"><span class="icon">📋</span> كشف حساب العميل</div>
-      <div class="nav-dropdown-item" data-page="broadcast"><span class="icon">📢</span> رسائل جماعية</div>
-    </div>
-
-    <div class="nav-dropdown" id="dropdown-admin">
-      <div class="nav-dropdown-header">⚙️ الإدارة</div>
-      <div class="nav-dropdown-item" data-page="users"><span class="icon">🔐</span> المستخدمين والصلاحيات</div>
-      <div class="nav-dropdown-item" data-page="activitylog"><span class="icon">📋</span> سجل العمليات</div>
-      <div class="nav-dropdown-item" data-page="backup"><span class="icon">💾</span> النسخ الاحتياطي</div>
-      <div class="nav-dropdown-item" data-page="sync"><span class="icon">🔄</span> المزامنة</div>
-      <div class="nav-dropdown-item" data-page="settings"><span class="icon">⚙️</span> الإعدادات</div>
-    </div>
-
-    <div class="nav-dropdown" id="dropdown-maintenance">
-      <div class="nav-dropdown-header">🔧 الصيانة والضمان</div>
-      <div class="nav-dropdown-item" data-page="maintenance"><span class="icon">🔧</span> إدارة الصيانة</div>
-      <div class="nav-dropdown-item" data-page="warranty"><span class="icon">🛡️</span> الضمانات</div>
-      <div class="nav-dropdown-item" data-page="devices"><span class="icon">💻</span> الأجهزة والسيريالات</div>
-    </div>
-
-    <div class="nav-dropdown" id="dropdown-analytics">
-      <div class="nav-dropdown-header">💡 التحليلات</div>
-      <div class="nav-dropdown-item" data-page="analytics"><span class="icon">📊</span> تحليلات المبيعات</div>
-      <div class="nav-dropdown-item" data-page="top-products"><span class="icon">⭐</span> أفضل المنتجات</div>
-      <div class="nav-dropdown-item" data-page="inventory-analysis"><span class="icon">🎯</span> تحليل المخزون</div>
-    </div>
-
-    <div class="nav-dropdown" id="dropdown-employees">
-      <div class="nav-dropdown-header">👨‍💼 الموظفين</div>
-      <div class="nav-dropdown-item" data-page="employees"><span class="icon">👤</span> قائمة الموظفين</div>
-      <div class="nav-dropdown-item" data-page="employee-performance"><span class="icon">📈</span> تقرير الأداء</div>
-      <div class="nav-dropdown-item" data-page="partners"><span class="icon">🤝</span> الشركاء</div>
-    </div>
-
     <div class="sidebar-footer">
       <div class="user-badge">
         <div class="avatar" id="userAvatar" onclick="toggleSidebarExpand()">A</div>
-        <div style="overflow:hidden;flex:1">
-          <div id="userName" style="font-size:0.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        <div style="overflow:hidden;flex:1;position:relative;z-index:1">
+          <div id="userName" style="font-size:0.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)"></div>
           <div id="userRole" style="font-size:0.68rem;color:var(--text2)"></div>
         </div>
       </div>
-      <div style="display:flex;gap:4px;flex-direction:column;width:100%;">
-        <button onclick="toggleDarkMode()" id="darkModeBtn" title="تبديل الوضع" style="width:50px;height:50px;background:var(--surface2);color:var(--text2);border:none;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.3rem;transition:all .2s">🌙</button>
-        <button class="btn-logout" onclick="doLogout()" title="تسجيل الخروج" style="width:100%;margin-top:4px;padding:8px">🚪</button>
-      </div>
+
+      <!-- Theme Toggle (Moon/Sun iOS style) -->
+      <button class="sidebar-action-btn" id="darkModeBtn" onclick="toggleDarkMode()" title="تبديل الوضع الليلي">
+        <span id="themeIcon">🌙</span>
+        <span class="btn-label" id="themeBtnLabel">الوضع الليلي</span>
+      </button>
+
+      <!-- Save Data -->
+      <button class="sidebar-action-btn save-btn" onclick="ghPush && ghPush(false)" title="حفظ البيانات">
+        <span>☁️</span>
+        <span class="btn-label">حفظ البيانات</span>
+      </button>
+
+      <!-- Logout -->
+      <button class="sidebar-action-btn logout-btn" onclick="doLogout()" title="تسجيل الخروج">
+        <span>🚪</span>
+        <span class="btn-label">تسجيل الخروج</span>
+      </button>
     </div>
   </nav>
+
+  <!-- Dropdowns moved OUTSIDE sidebar to fix backdrop-filter stacking context bug -->
+  <div class="nav-dropdown" id="dropdown-main">
+    <div class="nav-dropdown-header">📊 الرئيسية</div>
+    <div class="nav-dropdown-item" data-page="dashboard"><span class="icon">🏠</span> لوحة التحكم</div>
+    <div class="nav-dropdown-item" data-page="daily"><span class="icon">📅</span> التقرير اليومي</div>
+    <div class="nav-dropdown-item" data-page="serialsearch"><span class="icon">🔍</span> بحث بالسيريال</div>
+    <div class="nav-dropdown-item" data-page="accountstatement"><span class="icon">🪪</span> كشف حساب</div>
+  </div>
+
+  <div class="nav-dropdown" id="dropdown-sales">
+    <div class="nav-dropdown-header">🛒 الفواتير والمبيعات</div>
+    <div class="nav-dropdown-item" data-page="pos"><span class="icon">💳</span> نقطة البيع (POS)</div>
+    <div class="nav-dropdown-item" data-page="invoices"><span class="icon">🧾</span> أرشيف الفواتير</div>
+    <div class="nav-dropdown-item" data-page="installments"><span class="icon">📆</span> التقسيط</div>
+    <div class="nav-dropdown-item" data-page="returns"><span class="icon">↩️</span> المرتجعات</div>
+    <div class="nav-dropdown-item" data-page="quotations"><span class="icon">🏷️</span> عروض الأسعار</div>
+  </div>
+
+  <div class="nav-dropdown" id="dropdown-inventory">
+    <div class="nav-dropdown-header">📦 المخزون</div>
+    <div class="nav-dropdown-item" data-page="products"><span class="icon">📋</span> الأصناف</div>
+    <div class="nav-dropdown-item" data-page="warehouses"><span class="icon">🏭</span> المخازن</div>
+    <div class="nav-dropdown-item" data-page="stockcount"><span class="icon">📊</span> الجرد الكامل</div>
+    <div class="nav-dropdown-item" data-page="stocktransfer"><span class="icon">🔀</span> تحويل مخزن</div>
+    <div class="nav-dropdown-item" data-page="stockmovement"><span class="icon">🔄</span> حركة المخزون</div>
+    <div class="nav-dropdown-item" data-page="purchases"><span class="icon">🛍️</span> فواتير المشتريات</div>
+  </div>
+
+  <div class="nav-dropdown" id="dropdown-reports">
+    <div class="nav-dropdown-header">📈 التقارير</div>
+    <div class="nav-dropdown-item" data-page="reports"><span class="icon">📊</span> تقرير المبيعات</div>
+    <div class="nav-dropdown-item" data-page="financial"><span class="icon">💰</span> الأرباح والخسائر</div>
+    <div class="nav-dropdown-item" data-page="treasury"><span class="icon">🏦</span> الخزنة</div>
+    <div class="nav-dropdown-item" data-page="vouchers"><span class="icon">📄</span> سندات القبض والصرف</div>
+    <div class="nav-dropdown-item" data-page="expenses"><span class="icon">💸</span> المصروفات</div>
+  </div>
+
+  <div class="nav-dropdown" id="dropdown-customers">
+    <div class="nav-dropdown-header">👥 العملاء والموردين</div>
+    <div class="nav-dropdown-item" data-page="customers"><span class="icon">👤</span> العملاء</div>
+    <div class="nav-dropdown-item" data-page="suppliers"><span class="icon">🤝</span> الموردين</div>
+    <div class="nav-dropdown-item" data-page="customer-statement"><span class="icon">📋</span> كشف حساب العميل</div>
+    <div class="nav-dropdown-item" data-page="broadcast"><span class="icon">📢</span> رسائل جماعية</div>
+  </div>
+
+  <div class="nav-dropdown" id="dropdown-admin">
+    <div class="nav-dropdown-header">⚙️ الإدارة</div>
+    <div class="nav-dropdown-item" data-page="users"><span class="icon">🔐</span> المستخدمين والصلاحيات</div>
+    <div class="nav-dropdown-item" data-page="activitylog"><span class="icon">📋</span> سجل العمليات</div>
+    <div class="nav-dropdown-item" data-page="backup"><span class="icon">💾</span> النسخ الاحتياطي</div>
+    <div class="nav-dropdown-item" data-page="sync"><span class="icon">🔄</span> المزامنة</div>
+    <div class="nav-dropdown-item" data-page="settings"><span class="icon">⚙️</span> الإعدادات</div>
+  </div>
+
+  <div class="nav-dropdown" id="dropdown-maintenance">
+    <div class="nav-dropdown-header">🔧 الصيانة والضمان</div>
+    <div class="nav-dropdown-item" data-page="maintenance"><span class="icon">🔧</span> إدارة الصيانة</div>
+    <div class="nav-dropdown-item" data-page="warranty"><span class="icon">🛡️</span> الضمانات</div>
+    <div class="nav-dropdown-item" data-page="devices"><span class="icon">💻</span> الأجهزة والسيريالات</div>
+  </div>
+
+  <div class="nav-dropdown" id="dropdown-analytics">
+    <div class="nav-dropdown-header">💡 التحليلات</div>
+    <div class="nav-dropdown-item" data-page="analytics"><span class="icon">📊</span> تحليلات المبيعات</div>
+    <div class="nav-dropdown-item" data-page="top-products"><span class="icon">⭐</span> أفضل المنتجات</div>
+    <div class="nav-dropdown-item" data-page="inventory-analysis"><span class="icon">🎯</span> تحليل المخزون</div>
+  </div>
+
+  <div class="nav-dropdown" id="dropdown-employees">
+    <div class="nav-dropdown-header">👨‍💼 الموظفين</div>
+    <div class="nav-dropdown-item" data-page="employees"><span class="icon">👤</span> قائمة الموظفين</div>
+    <div class="nav-dropdown-item" data-page="employee-performance"><span class="icon">📈</span> تقرير الأداء</div>
+    <div class="nav-dropdown-item" data-page="partners"><span class="icon">🤝</span> الشركاء</div>
+  </div>
 
   <main class="main-content">
 
@@ -1425,6 +1670,11 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
         <div class="stat-card red" style="padding:18px;cursor:pointer" onclick="if(confirm('مسح كل البيانات؟'))resetAllData()">
           <div class="stat-icon">⚠️</div><div class="stat-value" style="font-size:1rem;color:var(--red)">إعادة ضبط</div>
           <div class="stat-label">حذف كل البيانات (خطر!)</div>
+        </div>
+        <div class="stat-card blue" id="backupGhRestoreCard" style="padding:18px;cursor:pointer;border:2px solid var(--accent)" onclick="backupGhRestore()">
+          <div class="stat-icon">📥</div>
+          <div class="stat-value" style="font-size:1rem">استعادة الآن من GitHub</div>
+          <div class="stat-label" id="backupGhRestoreLabel">اضغط للاستعادة الفورية من السحابة</div>
         </div>
       </div>
       <input type="file" id="importBackupFile" accept=".json" style="display:none" onchange="importBackup(this)">
@@ -2586,18 +2836,106 @@ async function ghPullNow() { const ok=await ghPull(false); if(ok){initApp();} }
 async function ghPushNow() { await ghPush(false); }
 function copyGistId() { navigator.clipboard.writeText(ghGistId()).then(()=>showPill('✅ تم النسخ',2000)); }
 
-setInterval(async()=>{
-  if(ghPendingSave && !ghSyncing){
-    if(ghToken() && ghGistId()){
-      ghPendingSave=false;
-      await ghPush(false);
+// استعادة من GitHub من صفحة النسخ الاحتياطي
+async function backupGhRestore() {
+  if (!ghToken() || !ghGistId()) {
+    if (confirm('لم يتم ربط GitHub بعد. هل تريد إعداد المزامنة الآن؟')) openGhSetup();
+    return;
+  }
+  const lbl = document.getElementById('backupGhRestoreLabel');
+  if (lbl) lbl.textContent = '⏳ جاري الاستعادة...';
+  const ok = await ghPull(false);
+  if (ok) { initApp(); if (lbl) lbl.textContent = '✅ تمت الاستعادة بنجاح!'; setTimeout(()=>{ if(lbl) lbl.textContent='اضغط للاستعادة الفورية من السحابة'; },3000); }
+  else { if (lbl) lbl.textContent = '❌ فشلت الاستعادة'; setTimeout(()=>{ if(lbl) lbl.textContent='اضغط للاستعادة الفورية من السحابة'; },3000); }
+}
+
+// ===== FIRST-RUN TOKEN SETUP FUNCTIONS =====
+function checkFirstRun() {
+  // لو مافيش token محفوظ، نعرض modal إعداد المزامنة
+  if (!ghToken()) {
+    const m = document.getElementById('firstRunModal');
+    if (m) m.style.display = 'flex';
+  }
+}
+
+function frSetStatus(msg, color='var(--accent)', bg='rgba(0,102,255,.08)') {
+  const s = document.getElementById('frStatus');
+  if (!s) return;
+  s.textContent = msg; s.style.color = color; s.style.background = bg; s.style.display = msg ? 'block' : 'none';
+}
+
+async function frConnect() {
+  const token  = (document.getElementById('frTokenInput').value || '').trim();
+  const gistId = (document.getElementById('frGistInput').value  || '').trim();
+  const btn    = document.getElementById('frConnectBtn');
+  if (!token) { frSetStatus('❌ أدخل الـ Token أولاً', 'var(--red)', 'rgba(229,57,53,.08)'); return; }
+  btn.disabled = true; btn.textContent = '⏳ جاري التحقق...';
+  frSetStatus('⏳ جاري التحقق من الـ Token...', 'var(--accent)', 'rgba(0,102,255,.08)');
+  try {
+    const r = await fetch('https://api.github.com/user', {headers:{'Authorization':'token '+token}});
+    if (!r.ok) throw new Error('Token غير صالح ('+r.status+')');
+    const ud = await r.json();
+    localStorage.setItem(GH_TOKEN_KEY, token);
+    frSetStatus('✅ مرحباً '+(ud.name||ud.login)+'!', 'var(--green)', 'rgba(0,168,84,.08)');
+    if (gistId) {
+      localStorage.setItem(GH_GIST_KEY, gistId);
+      frSetStatus('⏳ جاري استعادة البيانات من GitHub...', 'var(--accent)', 'rgba(0,102,255,.08)');
+      const ok = await ghPull(true);
+      frSetStatus(ok ? '✅ تم ربط الحساب واستعادة البيانات بنجاح!' : '⚠️ تم حفظ الإعدادات — تعذّر جلب Gist', ok?'var(--green)':'var(--yellow)', ok?'rgba(0,168,84,.08)':'rgba(249,168,37,.08)');
     } else {
-      // No GitHub: just confirm local save visually
-      ghPendingSave=false;
-      showPill('💾 تم الحفظ محلياً', 2000);
+      frSetStatus('⏳ جاري إنشاء Gist جديد...', 'var(--accent)', 'rgba(0,102,255,.08)');
+      const gr = await fetch('https://api.github.com/gists',{
+        method:'POST', headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github+json'},
+        body:JSON.stringify({description:'DigiTronics Database',public:false,files:{[GH_FILENAME]:{content:JSON.stringify(DB)}}})
+      });
+      if (!gr.ok) throw new Error('فشل إنشاء Gist ('+gr.status+')');
+      const gd = await gr.json();
+      localStorage.setItem(GH_GIST_KEY, gd.id);
+      frSetStatus('✅ تم إنشاء Gist جديد! ID: '+gd.id, 'var(--green)', 'rgba(0,168,84,.08)');
+    }
+    setTimeout(() => {
+      document.getElementById('firstRunModal').style.display = 'none';
+      updateGhStatusCard();
+    }, 2000);
+  } catch(e) {
+    frSetStatus('❌ '+e.message, 'var(--red)', 'rgba(229,57,53,.08)');
+    btn.disabled = false; btn.textContent = '🔗 ربط وحفظ الإعدادات';
+  }
+}
+
+function frSkip() {
+  document.getElementById('firstRunModal').style.display = 'none';
+}
+
+// ===== AUTO SYNC ENGINE — كل 3 ثوانٍ Push + Pull =====
+let ghLastPullTime = 0;
+let ghAutoSyncActive = false;
+
+setInterval(async () => {
+  if (!ghToken() || !ghGistId()) return;
+  if (ghSyncing) return;
+
+  const now = Date.now();
+
+  // PUSH: لو في بيانات جديدة تحتاج رفع
+  if (ghPendingSave) {
+    ghPendingSave = false;
+    await ghPush(true);
+    ghLastPullTime = Date.now(); // بعد الرفع مش محتاج pull فوراً
+    return;
+  }
+
+  // PULL: استعادة من GitHub كل 3 ثوانٍ عشان نشوف لو جهاز تاني رفع بيانات جديدة
+  if (now - ghLastPullTime >= 3000) {
+    ghLastPullTime = now;
+    const ok = await ghPull(true);
+    if (ok && currentUser) {
+      // إعادة رسم الـ UI بدون إعادة تحميل الصفحة
+      try { renderDashboard(); } catch(e) {}
+      try { updateGhStatusCard(); } catch(e) {}
     }
   }
-},3000);
+}, 3000);
 
 // ================= DB =================
 function loadDB() {
@@ -2668,16 +3006,20 @@ function showPage(page) {
   const pageEl = document.getElementById('page-' + page);
   if (!pageEl) return;
   pageEl.classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const navEl = document.querySelector('.nav-item[data-page="' + page + '"]');
-  if (navEl) navEl.classList.add('active');
-  
+
+  // Always close dropdowns when navigating
+  closeAllNavDropdowns();
+
   // Close sidebar on mobile
   if (window.innerWidth <= 768) {
-    document.getElementById('sidebar').classList.remove('open');
-    document.getElementById('overlay').classList.remove('show');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    const mainContent = document.querySelector('.main-content');
+    sidebar.classList.remove('expanded');
+    if (overlay) overlay.classList.remove('show');
+    if (mainContent) mainContent.classList.remove('expanded');
   }
-  
+
   // Render page content
   if (page === 'accountstatement') renderAccountStatement();
   if (page === 'vouchers') renderVouchers();
@@ -2706,7 +3048,6 @@ function showPage(page) {
   if (page === 'stockcount') renderStockCount();
   if (page === 'stocktransfer') renderStockTransfers();
   if (page === 'broadcast') initBroadcast();
-  if (page === 'reports') { renderReports(); }
   if (page === 'activitylog') renderActivityLog();
   if (page === 'users') renderUsers();
   if (page === 'backup') updateGhStatusCard();
@@ -2714,8 +3055,12 @@ function showPage(page) {
 }
 
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
-  document.getElementById('overlay').classList.toggle('show');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('overlay');
+  const mainContent = document.querySelector('.main-content');
+  sidebar.classList.toggle('expanded');
+  if (overlay) overlay.classList.toggle('show');
+  if (mainContent) mainContent.classList.toggle('expanded');
 }
 
 // ================= MODALS =================
@@ -8124,15 +8469,22 @@ function initApp() {
 // ================= DARK MODE =================
 function toggleDarkMode() {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
-  localStorage.setItem('cairo_theme', isDark ? 'light' : 'dark');
-  document.getElementById('darkModeBtn').textContent = isDark ? '🌙 وضع الليل' : '☀️ وضع النهار';
+  const newTheme = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('cairo_theme', newTheme);
+  _applyThemeIcons(newTheme);
+}
+function _applyThemeIcons(t) {
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeBtnLabel');
+  const isDark = t === 'dark';
+  if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+  if (label) label.textContent = isDark ? 'وضع النهار' : 'الوضع الليلي';
 }
 function applyTheme() {
   const t = localStorage.getItem('cairo_theme') || 'light';
   document.documentElement.setAttribute('data-theme', t);
-  const btn = document.getElementById('darkModeBtn');
-  if (btn) btn.textContent = t === 'dark' ? '☀️ وضع النهار' : '🌙 وضع الليل';
+  _applyThemeIcons(t);
 }
 
 // ================= ADMIN-ONLY CONTROLS =================
@@ -9091,16 +9443,13 @@ document.querySelectorAll('.nav-dropdown-item').forEach(item => {
     const page = this.dataset.page;
     if (page) {
       showPage(page);
-      // Close dropdown on mobile
-      if (window.innerWidth <= 768) {
-        closeAllNavDropdowns();
-      }
+      closeAllNavDropdowns();
     }
   });
 });
 
 // Toggle navigation dropdown
-function toggleNavDropdown(category) {
+function toggleNavDropdown(category, btnEl) {
   const dropdown = document.getElementById('dropdown-' + category);
   if (!dropdown) return;
   
@@ -9109,9 +9458,9 @@ function toggleNavDropdown(category) {
   
   if (!isShow) {
     dropdown.classList.add('show');
-    // Update active button
     document.querySelectorAll('.nav-icon-btn').forEach(btn => btn.classList.remove('active'));
-    event.target.closest('.nav-icon-btn').classList.add('active');
+    const target = btnEl || (typeof event !== 'undefined' && event.target ? event.target.closest('.nav-icon-btn') : null);
+    if (target) target.closest('.nav-icon-btn')?.classList.add('active');
   }
 }
 
@@ -9145,6 +9494,8 @@ document.addEventListener('click', function(e) {
 loadDB();
 showPage('dashboard');
 setTimeout(updateGhStatusCard, 0);
+// أول تشغيل: لو مافيش Token محفوظ → اعرض modal الربط
+setTimeout(checkFirstRun, 300);
 
 </script>
 </body>
