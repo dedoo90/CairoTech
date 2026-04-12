@@ -582,25 +582,8 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   </div>
 </div>
 
-<!-- ===== GITHUB SYNC MODAL ===== -->
-<div id="ghSetupModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);align-items:center;justify-content:center;padding:20px;font-family:'Cairo',sans-serif;">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:30px 26px;width:100%;max-width:450px;box-shadow:0 0 60px rgba(0,102,255,.2);">
-    <div style="font-size:1.4rem;font-weight:900;color:var(--accent);margin-bottom:4px;text-align:center">☁️ مزامنة GitHub</div>
-    <div style="color:var(--text2);font-size:0.8rem;margin-bottom:18px;text-align:center;line-height:1.7">أدخل بيانات GitHub لحفظ واستعادة البيانات تلقائياً من أي جهاز</div>
-    <div class="form-group">
-      <label>🔑 Personal Access Token <span style="color:var(--red)">*</span></label>
-      <input type="password" id="ghTokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="direction:ltr;font-family:monospace;font-size:0.85rem" autocomplete="off">
-      <div style="font-size:0.7rem;color:var(--text2);margin-top:4px;line-height:1.6">GitHub → Settings → Developer Settings → Personal access tokens → Tokens (classic) → New → صلاحية <strong>gist</strong> فقط</div>
-    </div>
-    <div class="form-group">
-      <label>🗄️ Gist ID <span style="color:var(--text2);font-size:0.72rem">(فارغ = إنشاء جديد تلقائياً)</span></label>
-      <input type="text" id="ghGistInput" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style="direction:ltr;font-family:monospace;font-size:0.85rem" autocomplete="off">
-    </div>
-    <div id="ghSetupStatus" style="font-size:0.8rem;min-height:22px;margin-bottom:10px;text-align:center;color:var(--accent)"></div>
-    <button class="btn-primary" onclick="ghSaveSetup()">🔗 ربط وتفعيل المزامنة</button>
-    <button onclick="ghDismissSetup()" style="width:100%;margin-top:10px;background:transparent;border:1px solid var(--border);border-radius:10px;padding:10px;font-family:'Cairo',sans-serif;cursor:pointer;color:var(--text2);font-size:0.85rem">استمرار بدون GitHub (محلي فقط)</button>
-  </div>
-</div>
+<!-- ===== GITHUB SYNC MODAL (stub - يحوّل لصفحة المزامنة) ===== -->
+<div id="ghSetupModal" style="display:none"></div>
 
 <!-- Sync Status Pill -->
 <div id="syncPill" style="display:none;position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(15,23,42,.9);color:#fff;padding:7px 20px;border-radius:30px;font-size:0.76rem;font-family:'Cairo',sans-serif;z-index:9000;pointer-events:none;white-space:nowrap;transition:opacity .3s"></div>
@@ -1641,7 +1624,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-accent" onclick="openGhSetup()">⚙️ إعدادات GitHub</button>
+          <button class="btn btn-accent" onclick="showPage('sync')">⚙️ إعدادات GitHub</button>
           <button class="btn btn-green" id="btnPullNow" onclick="ghPullNow()" style="display:none">📥 استعادة الآن من GitHub</button>
           <button class="btn btn-outline" id="btnPushNow" onclick="ghPushNow()" style="display:none">📤 حفظ الآن على GitHub</button>
         </div>
@@ -2558,6 +2541,7 @@ let DB = {
 
 let currentUser = null;
 let currentCart = [];
+let currentPage = 'dashboard';
 let pendingSerialPicker = null;
 
 // ================= USER REGISTRATION =================
@@ -2732,47 +2716,15 @@ function updateGhStatusCard() {
 }
 
 function openGhSetup() {
-  const m = document.getElementById('ghSetupModal'); if(!m) return;
-  document.getElementById('ghTokenInput').value = ghToken();
-  document.getElementById('ghGistInput').value  = ghGistId();
-  document.getElementById('ghSetupStatus').textContent = '';
-  m.style.display='flex';
+  // يوجّه لصفحة المزامنة الكاملة بدل الـ modal المكرر
+  showPage('sync');
+  renderSyncPage();
 }
-function ghDismissSetup() { document.getElementById('ghSetupModal').style.display='none'; }
+function ghDismissSetup() { /* stub - الـ modal محذوف */ }
 
 async function ghSaveSetup() {
-  const token  = document.getElementById('ghTokenInput').value.trim();
-  const gistId = document.getElementById('ghGistInput').value.trim();
-  const status = document.getElementById('ghSetupStatus');
-  if (!token) { status.textContent='❌ أدخل الـ Token'; status.style.color='var(--red)'; return; }
-  status.textContent='⏳ جاري التحقق...'; status.style.color='var(--accent)';
-  localStorage.setItem(GH_TOKEN_KEY, token);
-  try {
-    const r = await fetch('https://api.github.com/user', {headers:{'Authorization':'token '+token}});
-    if (!r.ok) throw new Error('Token غير صالح ('+r.status+')');
-    const ud = await r.json();
-    status.textContent = '✅ مرحباً '+(ud.name||ud.login);
-    if (gistId) {
-      localStorage.setItem(GH_GIST_KEY, gistId);
-      status.textContent += ' — جاري استعادة البيانات...';
-      const ok = await ghPull(true);
-      status.textContent = ok ? '✅ تم الربط واستعادة البيانات بنجاح!' : '⚠️ تم حفظ الـ Token لكن تعذّر جلب Gist';
-    } else {
-      status.textContent += ' — جاري إنشاء Gist جديد...';
-      const gr = await fetch('https://api.github.com/gists',{
-        method:'POST', headers:ghHeaders(),
-        body:JSON.stringify({description:'DigiTronics Database',public:false,files:{[GH_FILENAME]:{content:JSON.stringify(DB)}}})
-      });
-      if (!gr.ok) throw new Error('فشل إنشاء Gist ('+gr.status+')');
-      const gd = await gr.json();
-      localStorage.setItem(GH_GIST_KEY, gd.id);
-      status.textContent = '✅ تم إنشاء Gist وربطه بنجاح! ID: '+gd.id;
-    }
-    updateGhStatusCard();
-    setTimeout(()=>document.getElementById('ghSetupModal').style.display='none', 2500);
-  } catch(e) {
-    status.textContent='❌ '+e.message; status.style.color='var(--red)';
-  }
+  // stub - المنطق انتقل لـ syncPageConnect في صفحة المزامنة
+  syncPageConnect();
 }
 
 async function ghPull(silent=false) {
@@ -2921,17 +2873,17 @@ setInterval(async () => {
   if (ghPendingSave) {
     ghPendingSave = false;
     await ghPush(true);
-    ghLastPullTime = Date.now(); // بعد الرفع مش محتاج pull فوراً
+    ghLastPullTime = Date.now();
     return;
   }
 
-  // PULL: استعادة من GitHub كل 3 ثوانٍ عشان نشوف لو جهاز تاني رفع بيانات جديدة
+  // PULL: استعادة من GitHub كل 3 ثوانٍ لاستقبال تغييرات الأجهزة الأخرى
   if (now - ghLastPullTime >= 3000) {
     ghLastPullTime = now;
     const ok = await ghPull(true);
     if (ok && currentUser) {
-      // إعادة رسم الـ UI بدون إعادة تحميل الصفحة
-      try { renderDashboard(); } catch(e) {}
+      // إعادة رسم الصفحة الحالية فقط (بدون إعادة تحميل كاملة)
+      try { showPage(currentPage); } catch(e) {}
       try { updateGhStatusCard(); } catch(e) {}
     }
   }
@@ -3002,6 +2954,7 @@ function logProductChange(action, productName, changes) {
 
 // ================= NAVIGATION =================
 function showPage(page) {
+  currentPage = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const pageEl = document.getElementById('page-' + page);
   if (!pageEl) return;
