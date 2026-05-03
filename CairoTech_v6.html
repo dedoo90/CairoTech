@@ -7726,6 +7726,29 @@ function renderUnifiedASCard(customer, supplier) {
   // Build combined transactions for a person who is both customer and supplier
   let transactions = [];
 
+  // Opening balances
+  if ((customer.balance || 0) > 0) {
+    transactions.push({
+      date: new Date(0).toISOString(),
+      desc: 'الرصيد الافتتاحي (عميل)',
+      saleDebit: customer.balance || 0,
+      saleCredit: 0,
+      purDebit: 0, purCredit: 0,
+      badge: '<span class="badge badge-blue">افتتاحي</span>',
+      bg: 'rgba(0,102,255,0.04)'
+    });
+  }
+  if ((supplier.balance || 0) > 0) {
+    transactions.push({
+      date: new Date(0).toISOString(),
+      desc: 'الرصيد الافتتاحي (مورد)',
+      saleDebit: 0, saleCredit: 0,
+      purDebit: supplier.balance || 0, purCredit: 0,
+      badge: '<span class="badge badge-yellow">افتتاحي</span>',
+      bg: 'rgba(249,168,37,0.04)'
+    });
+  }
+
   // Sale invoices (as customer)
   DB.saleInvoices.filter(inv => inv.customer === customer.name).forEach(inv => {
     const itemsSummary = inv.items && inv.items.length > 0
@@ -7886,6 +7909,15 @@ function renderASCard(entity, type) {
   let transactions = [];
 
   if (type === 'customer') {
+    if ((entity.balance || 0) > 0) {
+      transactions.push({
+        date: new Date(0).toISOString(),
+        desc: 'الرصيد الافتتاحي',
+        debit: entity.balance || 0,
+        credit: 0,
+        type: 'opening'
+      });
+    }
     const invoices = DB.saleInvoices.filter(inv => inv.customer === entity.name ||
       (entity.phone && inv.customerPhone && inv.customerPhone.replace(/\s/g,'') === entity.phone.replace(/\s/g,'')));
     invoices.forEach(inv => {
@@ -7901,16 +7933,6 @@ function renderASCard(entity, type) {
         type: 'invoice'
       });
     });
-    // ✅ إضافة: فواتير الشراء لنفس الشخص (إذا كان مورداً أيضاً)
-    DB.purchaseInvoices.filter(p =>
-      p.supplier === entity.name ||
-      (entity.phone && p.supplierPhone && p.supplierPhone.replace(/\s/g,'') === entity.phone.replace(/\s/g,''))
-    ).forEach(p => {
-      const itemsSummary = p.items && p.items.length > 0
-        ? p.items.map(i => `${i.name} ×${i.qty}`).join('، ')
-        : (DB.products.find(prod => prod.id === p.productId)?.name || '-');
-      transactions.push({ date: p.date, desc: `🛍️ فاتورة شراء #${p.id} — ${itemsSummary}`, debit: 0, credit: p.total || 0, type: 'purchase_invoice' });
-    });
     DB.asPayments = DB.asPayments || [];
     DB.asPayments.filter(p => p.entityId == entity.id && p.entityType === 'customer').forEach(p => {
       transactions.push({ date: p.date, desc: p.note || 'دفعة', debit: p.direction === 'receive' ? p.amount : 0, credit: p.direction === 'pay' ? p.amount : 0, type: 'payment', paymentId: p.id });
@@ -7922,21 +7944,21 @@ function renderASCard(entity, type) {
     balance = transactions.reduce((s, t) => s + t.debit - t.credit, 0);
 
   } else if (type === 'supplier') {
+    if ((entity.balance || 0) > 0) {
+      transactions.push({
+        date: new Date(0).toISOString(),
+        desc: 'الرصيد الافتتاحي',
+        debit: entity.balance || 0,
+        credit: 0,
+        type: 'opening'
+      });
+    }
     const purchases = DB.purchaseInvoices.filter(p => p.supplierId == entity.id || p.supplier === entity.name);
     purchases.forEach(p => {
       const itemsSummary = p.items && p.items.length > 0
         ? p.items.map(i => `${i.name} ×${i.qty}`).join('، ')
         : (DB.products.find(prod => prod.id === p.productId)?.name || '-');
       transactions.push({ date: p.date, desc: `🛍️ فاتورة شراء #${p.id} — ${itemsSummary}`, debit: p.total || 0, credit: 0, type: 'invoice' });
-    });
-    // ✅ إضافة: فواتير البيع لنفس الشخص (إذا اشترى من المحل)
-    DB.saleInvoices.filter(inv =>
-      inv.customer === entity.name ||
-      (entity.phone && inv.customerPhone && inv.customerPhone.replace(/\s/g,'') === entity.phone.replace(/\s/g,''))
-    ).forEach(inv => {
-      const itemsSummary = inv.items && inv.items.length > 0
-        ? inv.items.map(i => `${i.name} ×${i.qty}`).join('، ') : 'بيع';
-      transactions.push({ date: inv.date, desc: `🧾 فاتورة بيع #${inv.id} — ${itemsSummary}`, debit: 0, credit: inv.total || 0, type: 'sale_invoice' });
     });
     DB.supplierPayments.filter(sp => sp.supplierId == entity.id && sp.type === 'payment').forEach(sp => {
       transactions.push({ date: sp.date, desc: sp.desc || 'دفعة للمورد', debit: 0, credit: sp.amount, type: 'payment' });
