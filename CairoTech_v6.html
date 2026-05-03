@@ -7119,8 +7119,6 @@ function printInvoice(invoice) {
       <div><strong>التليفون:</strong> ${invoice.customerPhone || '-'}</div>
       <div><strong>التاريخ:</strong> ${new Date(invoice.date).toLocaleString('ar-EG')}</div>
       <div><strong>النوع:</strong> ${getInvoiceTypeLabel(invoice.invoiceType)}</div>
-      <div><strong>الدفع:</strong> ${getPaymentLabel(invoice.payment)}</div>
-      <div><strong>البائع:</strong> ${invoice.user || '-'}</div>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-bottom:14px">
       <thead><tr style="background:#0066ff;color:#fff">
@@ -7131,14 +7129,16 @@ function printInvoice(invoice) {
       </tr></thead>
       <tbody>${itemsHtml}</tbody>
     </table>
-    <div style="display:flex;justify-content:space-between;font-size:0.92rem;padding:10px;background:#f5f5f5;border-radius:8px;margin-bottom:8px">
-      <span>الإجمالي قبل الخصم:</span><span>${formatMoney(invoice.subtotal || 0)}</span>
+    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:8px;padding:10px 14px;font-size:1rem;font-weight:700;margin-bottom:8px">
+      <span>الإجمالي قبل الخصم:</span>
+      <span style="color:var(--accent)">${formatMoney(invoice.subtotal || 0)}</span>
     </div>
-    ${invoice.discount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:0.92rem;padding:10px;background:#fff3f3;border-radius:8px;margin-bottom:8px;color:#e53935"><span>الخصم:</span><span>- ${formatMoney(invoice.discount)}</span></div>` : ''}
-    ${invoice.invoiceType === 'ajel' ? `<div style="display:flex;justify-content:space-between;font-size:0.92rem;padding:10px;background:#e8f7ef;border-radius:8px;margin-bottom:8px"><span>المدفوع الآن:</span><span style="color:#00a854;font-weight:700">${formatMoney(paidAmount)}</span></div>
-    <div style="display:flex;justify-content:space-between;font-size:0.92rem;padding:10px;background:#fff3f3;border-radius:8px;margin-bottom:8px"><span>المتبقي:</span><span style="color:#e53935;font-weight:700">${formatMoney(remainingAmount)}</span></div>` : ''}
-    <div style="display:flex;justify-content:space-between;font-size:1.1rem;font-weight:700;padding:10px;background:#f0f4ff;border-radius:8px">
-      <span>الإجمالي الكلي:</span><span style="color:#0066ff">${formatMoney(invoice.total || 0)}</span>
+    ${invoice.discount > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;background:#fff3f3;border-radius:8px;padding:10px 14px;font-size:0.92rem;font-weight:700;color:#e53935;margin-bottom:8px"><span>الخصم:</span><span>- ${formatMoney(invoice.discount)}</span></div>` : ''}
+    ${invoice.invoiceType === 'ajel' ? `<div style="display:flex;justify-content:space-between;align-items:center;background:#e8f7ef;border-radius:8px;padding:10px 14px;font-size:0.92rem;font-weight:700;margin-bottom:8px"><span>المدفوع الآن:</span><span style="color:#00a854">${formatMoney(paidAmount)}</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;background:#fff3f3;border-radius:8px;padding:10px 14px;font-size:0.92rem;font-weight:700;margin-bottom:8px"><span>المتبقي:</span><span style="color:#e53935">${formatMoney(remainingAmount)}</span></div>` : ''}
+    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:8px;padding:10px 14px;font-size:1rem;font-weight:700">
+      <span>الإجمالي الكلي:</span>
+      <span style="color:var(--accent)">${formatMoney(invoice.total || 0)}</span>
     </div>
     <div style="text-align:center;margin-top:14px;font-size:0.75rem;color:var(--text2)">شكراً لتعاملكم معنا</div>
   </div>`;
@@ -7733,7 +7733,7 @@ function renderUnifiedASCard(customer, supplier) {
     transactions.push({
       date: inv.date,
       desc: `📤 فاتورة بيع #${inv.id} — ${itemsSummary}`,
-      saleDebit: inv.invoiceType === 'ajel' ? inv.total : 0,
+      saleDebit: inv.invoiceType === 'ajel' ? getSaleInvoiceDue(inv) : 0,
       saleCredit: inv.invoiceType !== 'ajel' ? inv.total : 0,
       purDebit: 0, purCredit: 0,
       badge: '<span class="badge badge-blue">بيع</span>',
@@ -7896,7 +7896,7 @@ function renderASCard(entity, type) {
       transactions.push({
         date: inv.date,
         desc: `🧾 فاتورة بيع #${inv.id} — ${itemsSummary}`,
-        debit: inv.invoiceType === 'ajel' ? inv.total : 0,
+        debit: inv.invoiceType === 'ajel' ? getSaleInvoiceDue(inv) : 0,
         credit: inv.invoiceType !== 'ajel' ? inv.total : 0,
         type: 'invoice'
       });
