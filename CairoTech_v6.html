@@ -986,7 +986,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
             </div>
             <div class="cart-total-row"><span>الخصم</span><span id="cartDiscount">0 EGP</span></div>
             <div class="cart-grand-total"><span>الإجمالي</span><span id="cartTotal">0 EGP</span></div>
-            <button class="btn btn-green" id="posCompleteBtn" style="width:100%;justify-content:center;margin-bottom:7px" onclick="handleCompleteAction()">✅ إتمام البيع وطباعة الفاتورة</button>
+            <button class="btn btn-green" id="posCompleteBtn" style="width:100%;justify-content:center;margin-bottom:7px" onclick="handleCompleteAction()">✅ إصدار بيع جديد V2</button>
             <button class="btn btn-danger btn-sm" style="width:100%;justify-content:center" onclick="clearCart()">🗑️ مسح الفاتورة</button>
           </div>
         </div>
@@ -4811,7 +4811,7 @@ function setPOSMode(mode) {
   btnPur.style.cssText = `flex:1;padding:7px 4px;border-radius:7px;cursor:pointer;font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;border:2px solid ${!isSale ? 'var(--accent)' : 'var(--border)'};background:${!isSale ? 'var(--accent)' : 'var(--surface2)'};color:${!isSale ? '#fff' : 'var(--text2)'}`;
   const completeBtn = document.getElementById('posCompleteBtn');
   if (completeBtn) {
-    completeBtn.textContent = isSale ? '✅ إتمام البيع وطباعة الفاتورة' : '📥 إتمام الشراء وطباعة الفاتورة';
+    completeBtn.textContent = isSale ? '✅ إصدار بيع جديد V2' : '📥 إتمام الشراء وطباعة الفاتورة';
     completeBtn.style.background = isSale ? 'var(--green)' : 'var(--accent)';
   }
   ensureSaleIssueButtonBinding();
