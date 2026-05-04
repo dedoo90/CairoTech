@@ -4890,7 +4890,7 @@ function confirmSaleIssueModal() {
   onPaymentTypeChange();
   onSaleInvoiceTypeChange();
   closeModal('saleIssueModal');
-  completeSale();
+  completeSale(true);
 }
 
 function updateCartCustomerSelect() {
@@ -7177,13 +7177,18 @@ function updatePartialPaymentVisibility() {
   }
 }
 
-function completeSale() {
+function completeSale(forceRun = false) {
   if (currentCart.length === 0) { showToast('السلة فارغة', 'error'); return; }
 
   const posMode = document.getElementById('posModeVal')?.value || 'sale';
 
   if (posMode === 'purchase') {
     completePurchaseFromPOS();
+    return;
+  }
+
+  if (!forceRun && posMode === 'sale') {
+    openSaleIssueModal();
     return;
   }
 
