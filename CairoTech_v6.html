@@ -5,16 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>CairoTech - نظام الإدارة الاحترافي بالسيريالات</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Noto+Kufi+Arabic:wght@400;600;700&display=swap');
 :root {
   --bg:#f0f4f8; --surface:#ffffff; --surface2:#e8edf3; --border:#c8d6e5;
   --accent:#0066ff; --accent2:#0044cc; --green:#00a854; --red:#e53935;
   --yellow:#f9a825; --purple:#7c3aed; --orange:#e65100;
   --text:#000000; --text2:#374151; --glow:0 0 20px rgba(0,102,255,0.15);
+  --app-font:'Tajawal','Noto Kufi Arabic','Segoe UI','Tahoma',Arial,sans-serif;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html{font-size:16px;}
-body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;touch-action:manipulation;}
+body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;touch-action:manipulation;}
 
 /* LOGIN */
 #loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at center,#dce8f8 0%,#f0f4f8 70%);padding:20px;}
@@ -3123,7 +3124,7 @@ function showPage(page) {
   if (page === 'vouchers') renderVouchers();
   if (page === 'dashboard') renderDashboard();
   if (page === 'daily') renderDailyReport();
-  if (page === 'pos') { renderPOSProducts(); setPOSMode('sale'); }
+  if (page === 'pos') { renderPOSProducts(); setPOSMode('sale'); ensureSaleIssueButtonBinding(); }
   if (page === 'invoices') renderInvoices();
   if (page === 'products') renderProductsTable();
   if (page === 'stockmovement') renderStockMovement();
@@ -4813,6 +4814,7 @@ function setPOSMode(mode) {
     completeBtn.textContent = isSale ? '✅ إتمام البيع وطباعة الفاتورة' : '📥 إتمام الشراء وطباعة الفاتورة';
     completeBtn.style.background = isSale ? 'var(--green)' : 'var(--accent)';
   }
+  ensureSaleIssueButtonBinding();
   updateCartCustomerSelect();
 }
 
