@@ -1019,43 +1019,6 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
           <tbody id="newInvoiceTbody"></tbody>
         </table></div>
       </div>
-      <div class="table-container">
-        <div class="table-header"><div class="table-title">🛒 إنشاء فاتورة بيع من نفس الصفحة</div></div>
-        <div class="pos-layout" style="height:auto">
-          <div class="pos-items" style="min-height:460px">
-            <div class="pos-header" style="display:flex;gap:6px;align-items:center">
-              <input class="pos-search" id="newInvSearch" type="text" placeholder="🔍 ابحث بالاسم أو السيريال..." style="flex:1" oninput="renderNewInvoiceProducts()">
-            </div>
-            <div class="pos-product-grid" id="newInvProductGrid"></div>
-          </div>
-          <div class="pos-cart" style="min-height:460px">
-            <div class="cart-header"><span>🧾 سلة New Invoic</span></div>
-            <div class="cart-items" id="newInvCartItems"></div>
-            <div class="cart-footer">
-              <div class="discount-row"><input class="discount-input" id="newInvCustomer" type="text" placeholder="اسم العميل"></div>
-              <div class="discount-row"><input class="discount-input" id="newInvCustomerPhone" type="tel" placeholder="📞 رقم الهاتف" style="direction:ltr"></div>
-              <div class="discount-row">
-                <select class="discount-input" id="newInvInvoiceType" style="flex:1" onchange="toggleNewInvPartial()">
-                  <option value="cash">💵 كاش</option>
-                  <option value="ajel">📋 آجل</option>
-                </select>
-                <select class="discount-input" id="newInvPaymentType" style="flex:1" onchange="toggleNewInvPartial()">
-                  <option value="cash">💵 كاش</option>
-                  <option value="instapay">📲 InstaPay</option>
-                  <option value="vodafone">📱 Vodafone Cash</option>
-                  <option value="fawry">🏪 Fawry</option>
-                </select>
-              </div>
-              <div class="discount-row"><input class="discount-input" id="newInvDiscount" type="number" min="0" step="0.01" placeholder="الخصم" oninput="renderNewInvoiceCart()"></div>
-              <div class="discount-row" id="newInvPartialRow" style="display:none"><input class="discount-input" id="newInvPartialPaid" type="number" min="0" step="0.01" placeholder="المدفوع الآن"></div>
-              <div class="cart-total-row"><span>الأصناف</span><span id="newInvCount">0</span></div>
-              <div class="cart-total-row"><span>الخصم</span><span id="newInvDiscountShow">0 EGP</span></div>
-              <div class="cart-grand-total"><span>الإجمالي</span><span id="newInvTotal">0 EGP</span></div>
-              <button class="btn btn-green" style="width:100%;justify-content:center" onclick="completeSaleFromNewInvoice()">✅ إتمام البيع وطباعة الفاتورة</button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- INVOICES -->
@@ -1957,6 +1920,89 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
   <div class="modal-footer">
     <button class="btn btn-outline" onclick="closeModal('purchaseModal')">إلغاء</button>
     <button class="btn btn-accent" onclick="savePurchase()">💾 حفظ الفاتورة</button>
+  </div>
+</div></div>
+
+<!-- New Sale Invoice Modal (Purchase-like design) -->
+<div class="modal-overlay" id="newSaleModal"><div class="modal modal-xl">
+  <div class="modal-title">🧾 فاتورة بيع جديدة<button class="modal-close" onclick="closeModal('newSaleModal')">&times;</button></div>
+
+  <div class="grid-2">
+    <div class="form-group"><label>بحث العميل</label>
+      <input type="text" id="nsCustomerSearch" placeholder="🔍 ابحث باسم العميل أو الهاتف..." oninput="filterNewSaleCustomers(this.value)">
+    </div>
+    <div class="form-group"><label>العميل</label>
+      <select id="nsCustomer" onchange="onNewSaleCustomerChange()"><option value="">اختر العميل...</option></select>
+    </div>
+    <div class="form-group"><label>تليفون العميل</label><input type="tel" id="nsCustomerPhone" placeholder="01xxxxxxxxx" style="direction:ltr"></div>
+    <div class="form-group"><label>تليفون إضافي</label><input type="tel" id="nsCustomerPhone2" placeholder="اختياري" style="direction:ltr"></div>
+  </div>
+  <div class="grid-2">
+    <div class="form-group"><label>نوع الفاتورة</label>
+      <select id="nsInvoiceType" onchange="onNewSaleInvoiceTypeChange()">
+        <option value="cash">💵 كاش</option>
+        <option value="ajel">📋 آجل</option>
+      </select>
+    </div>
+    <div class="form-group"><label>طريقة الدفع</label>
+      <select id="nsPaymentMethod">
+        <option value="cash">💵 كاش</option>
+        <option value="instapay">📲 InstaPay</option>
+        <option value="vodafone">📱 Vodafone Cash</option>
+        <option value="fawry">🏪 Fawry</option>
+      </select>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <div style="font-weight:700;font-size:0.88rem;margin-bottom:10px;color:var(--accent)">➕ إضافة صنف للفاتورة</div>
+
+  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
+    <div class="grid-2">
+      <div class="form-group" style="margin-bottom:8px;position:relative"><label>المنتج</label>
+        <input type="text" id="nsProductSearch" placeholder="🔍 اكتب اسم المنتج أو 3 حروف للبحث..."
+          autocomplete="off" oninput="nsSearchInput(this.value)" onfocus="nsSearchInput(this.value)"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'Cairo',sans-serif;font-size:0.9rem;outline:none;transition:border-color .2s"
+          onkeydown="nsKeyNav(event)">
+        <input type="hidden" id="nsProductSelect">
+        <div id="nsProductDropdown"
+          style="display:none;position:absolute;top:100%;right:0;left:0;background:var(--surface);border:1px solid var(--accent);border-radius:10px;z-index:9999;max-height:220px;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,.2);margin-top:2px"></div>
+      </div>
+      <div class="form-group" style="margin-bottom:8px"><label>سعر البيع</label>
+        <input type="number" id="nsPrice" placeholder="0" step="0.01">
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:8px">
+      <label>السيريالات — <span id="nsSerialsCount" style="color:var(--accent);font-weight:700">0 سيريال</span></label>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input type="text" id="nsScanInput" placeholder="📷 اسكان سيريال هنا ثم Enter..."
+          style="flex:1;background:var(--surface2);border:2px solid var(--green);border-radius:8px;padding:8px 12px;color:var(--text);font-family:Cairo,sans-serif;font-size:0.88rem;outline:none"
+          onkeydown="nsScanSerial(event)">
+        <button class="btn btn-green btn-sm" onclick="nsScanFocus()" title="تركيز على الاسكانر">🎯</button>
+      </div>
+      <textarea id="nsSerials" rows="3" placeholder="SN123456&#10;SN789012&#10;...&#10;(اتركه فارغاً للمنتجات بدون سيريال)"
+        oninput="updateNsSerialsCount()"></textarea>
+      <div style="font-size:0.68rem;color:var(--text2);margin-top:3px">💡 اكتب سيريال واحد في كل سطر، أو استخدم الاسكانر بالأعلى</div>
+    </div>
+    <div class="form-group" style="margin-bottom:4px"><label>الكمية (للمنتجات بدون سيريال)</label>
+      <input type="number" id="nsQty" value="1" min="1">
+    </div>
+    <button class="btn btn-accent btn-sm" onclick="addNewSaleItem()" style="width:100%;justify-content:center;margin-top:8px">➕ إضافة للفاتورة</button>
+  </div>
+
+  <div id="nsItemsList" style="margin-bottom:12px"></div>
+  <div class="grid-2">
+    <div class="form-group"><label>خصم</label><input type="number" id="nsDiscount" value="0" min="0" step="0.01" oninput="renderNewSaleCart()"></div>
+    <div class="form-group"><label>المدفوع الآن (للآجل)</label><input type="number" id="nsPartialPaid" value="" min="0" step="0.01"></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:8px;padding:10px 14px;font-size:1rem;font-weight:700">
+    <span>إجمالي الفاتورة:</span>
+    <span id="nsTotalDisplay" style="color:var(--accent)">0.00 EGP</span>
+  </div>
+
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('newSaleModal')">إلغاء</button>
+    <button class="btn btn-green" onclick="saveNewSaleInvoice()">✅ إتمام البيع وطباعة الفاتورة</button>
   </div>
 </div></div>
 
@@ -3191,7 +3237,6 @@ function showPage(page) {
   if (page === 'daily') renderDailyReport();
   if (page === 'pos') { renderPOSProducts(); setPOSMode('sale'); ensureSaleIssueButtonBinding(); }
   if (page === 'invoices' || page === 'newinvoice') renderInvoices();
-  if (page === 'newinvoice') { renderNewInvoiceProducts(); renderNewInvoiceCart(); toggleNewInvPartial(); }
   if (page === 'products') renderProductsTable();
   if (page === 'stockmovement') renderStockMovement();
   if (page === 'purchases') renderPurchases();
@@ -4898,120 +4943,292 @@ function openNewInvoiceModal() {
 }
 
 function startNewInvoiceFromPage() {
-  if (currentPage !== 'newinvoice') {
-    openNewInvoiceModal();
+  openNewSaleModal();
+}
+
+let nsCart = [];
+let _nsDropIdx = -1;
+
+function openNewSaleModal() {
+  nsCart = [];
+  document.getElementById('nsCustomerSearch').value = '';
+  filterNewSaleCustomers('');
+  document.getElementById('nsCustomerPhone').value = '';
+  document.getElementById('nsCustomerPhone2').value = '';
+  document.getElementById('nsInvoiceType').value = 'cash';
+  document.getElementById('nsPaymentMethod').value = 'cash';
+  document.getElementById('nsPaymentMethod').disabled = false;
+  document.getElementById('nsProductSearch').value = '';
+  document.getElementById('nsProductSelect').value = '';
+  document.getElementById('nsPrice').value = '';
+  document.getElementById('nsSerials').value = '';
+  document.getElementById('nsQty').value = '1';
+  document.getElementById('nsDiscount').value = '0';
+  document.getElementById('nsPartialPaid').value = '';
+  document.getElementById('nsScanInput').value = '';
+  updateNsSerialsCount();
+  renderNewSaleCart();
+  openModal('newSaleModal');
+}
+
+function filterNewSaleCustomers(query = '') {
+  const sel = document.getElementById('nsCustomer');
+  if (!sel) return;
+  const q = (query || '').trim().toLowerCase();
+  let list = DB.customers || [];
+  if (q) {
+    list = list.filter(c => (c.name && c.name.toLowerCase().includes(q)) || (c.phone && c.phone.includes(q)) || (c.phone2 && c.phone2.includes(q)));
+  }
+  const current = sel.value;
+  sel.innerHTML = '<option value="">اختر العميل...</option>' + list.map(c => `<option value="${c.id}">${c.name}${c.phone ? ' — ' + c.phone : ''}</option>`).join('');
+  if (current && list.some(c => String(c.id) === String(current))) sel.value = current;
+}
+
+function onNewSaleCustomerChange() {
+  const id = document.getElementById('nsCustomer').value;
+  const c = DB.customers.find(x => String(x.id) === String(id));
+  document.getElementById('nsCustomerPhone').value = c?.phone || '';
+  document.getElementById('nsCustomerPhone2').value = c?.phone2 || '';
+}
+
+function onNewSaleInvoiceTypeChange() {
+  const t = document.getElementById('nsInvoiceType').value;
+  const m = document.getElementById('nsPaymentMethod');
+  m.disabled = t === 'ajel';
+  if (t === 'ajel') m.value = 'cash';
+}
+
+function nsSearchInput(val) {
+  _nsDropIdx = -1;
+  const drop = document.getElementById('nsProductDropdown');
+  if (!drop) return;
+  const q = (val || '').trim().toLowerCase();
+  const matches = q.length >= 1
+    ? DB.products.filter(p => p.name.toLowerCase().includes(q) || String(p.id).includes(q)).slice(0, 40)
+    : DB.products.slice(0, 40);
+  if (!matches.length) {
+    drop.innerHTML = '<div style="padding:12px 14px;color:var(--text2);font-size:0.82rem;text-align:center">لا يوجد منتج مطابق</div>';
+    drop.style.display = 'block'; return;
+  }
+  drop.innerHTML = matches.map((p, i) => {
+    const stock = typeof getProductStock === 'function' ? getProductStock(p.id) : '?';
+    const safe = p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return `<div id="nsDrop_${i}" onclick="nsSelectProduct(${p.id},'${safe}',${p.sellPrice || 0})"
+      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;transition:background .12s"
+      onmouseover="nsDropHover(${i})" onmouseout="this.style.background=''">
+      <span style="font-weight:700">${p.name}</span>
+      <span style="font-size:0.72rem;color:var(--text2);white-space:nowrap;margin-right:8px">بيع: ${formatMoney(p.sellPrice || 0)} | مخزون: ${stock}</span>
+    </div>`;
+  }).join('');
+  drop.style.display = 'block';
+}
+
+function nsDropHover(i) {
+  _nsDropIdx = i;
+  document.querySelectorAll('#nsProductDropdown > div').forEach((el, j) => el.style.background = j === i ? 'var(--surface2)' : '');
+}
+
+function nsKeyNav(e) {
+  const drop = document.getElementById('nsProductDropdown');
+  if (!drop || drop.style.display === 'none') return;
+  const items = drop.querySelectorAll('div[id^="nsDrop_"]');
+  if (!items.length) return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); _nsDropIdx = Math.min(_nsDropIdx + 1, items.length - 1); nsDropHover(_nsDropIdx); items[_nsDropIdx]?.scrollIntoView({ block: 'nearest' }); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); _nsDropIdx = Math.max(_nsDropIdx - 1, 0); nsDropHover(_nsDropIdx); items[_nsDropIdx]?.scrollIntoView({ block: 'nearest' }); }
+  if (e.key === 'Enter' && _nsDropIdx >= 0) { e.preventDefault(); items[_nsDropIdx]?.click(); }
+  if (e.key === 'Escape') drop.style.display = 'none';
+}
+
+function nsSelectProduct(id, name, sellPrice) {
+  document.getElementById('nsProductSelect').value = id;
+  document.getElementById('nsProductSearch').value = name;
+  document.getElementById('nsPrice').value = sellPrice || '';
+  document.getElementById('nsProductDropdown').style.display = 'none';
+  _nsDropIdx = -1;
+}
+
+function updateNsSerialsCount() {
+  const ta = document.getElementById('nsSerials');
+  const countEl = document.getElementById('nsSerialsCount');
+  if (!ta || !countEl) return;
+  const serials = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+  countEl.textContent = serials.length + ' سيريال';
+  countEl.style.color = serials.length > 0 ? 'var(--green)' : 'var(--accent)';
+}
+
+function nsScanSerial(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const scanEl = document.getElementById('nsScanInput');
+  const scanned = (scanEl.value || '').trim();
+  if (!scanned) return;
+  const ta = document.getElementById('nsSerials');
+  const existing = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (existing.includes(scanned)) { showToast('❌ السيريال مكرر في القائمة', 'error'); scanEl.value = ''; scanEl.focus(); return; }
+  existing.push(scanned);
+  ta.value = existing.join('\n');
+  updateNsSerialsCount();
+  scanEl.value = '';
+  scanEl.focus();
+  showToast('✅ ' + scanned, 'success');
+}
+
+function nsScanFocus() {
+  const el = document.getElementById('nsScanInput');
+  if (el) { el.focus(); el.select(); }
+}
+
+function addNewSaleItem() {
+  const productId = parseInt(document.getElementById('nsProductSelect').value);
+  const price = parseFloat(document.getElementById('nsPrice').value) || 0;
+  const serialsText = document.getElementById('nsSerials').value;
+  const qtyInput = parseInt(document.getElementById('nsQty').value) || 1;
+  if (!productId) { showToast('اختر المنتج', 'error'); return; }
+  if (!price) { showToast('أدخل سعر البيع', 'error'); return; }
+  const product = DB.products.find(p => p.id === productId);
+  if (!product) return;
+  const serials = serialsText.split(/\n/).map(s => s.trim()).filter(Boolean);
+  const uniqueSerials = [...new Set(serials)];
+  if (uniqueSerials.length !== serials.length) { showToast('❌ يوجد سيريالات مكررة', 'error'); return; }
+
+  let qty = qtyInput;
+  if (product.hasSerial === false) {
+    const stock = getProductStock(productId);
+    if (qtyInput > stock) { showToast(`الكمية المتاحة: ${stock}`, 'error'); return; }
+  } else {
+    if (serials.length === 0) { showToast('أدخل السيريالات', 'error'); return; }
+    const unavailable = serials.filter(sn => !DB.serials.find(x => x.productId === productId && x.serial === sn && x.status === 'available'));
+    if (unavailable.length) { showToast('❌ بعض السيريالات غير متاحة للبيع', 'error'); return; }
+    const dupInCart = serials.filter(sn => nsCart.some(i => (i.serials || []).includes(sn)));
+    if (dupInCart.length) { showToast('❌ يوجد سيريال مكرر داخل نفس الفاتورة', 'error'); return; }
+    qty = serials.length;
+  }
+
+  nsCart.push({
+    productId,
+    name: product.name,
+    price,
+    buyPrice: product.buyPrice || 0,
+    qty,
+    serials: product.hasSerial === false ? [] : serials,
+    noSerial: product.hasSerial === false
+  });
+
+  document.getElementById('nsProductSearch').value = '';
+  document.getElementById('nsProductSelect').value = '';
+  document.getElementById('nsPrice').value = '';
+  document.getElementById('nsSerials').value = '';
+  document.getElementById('nsQty').value = '1';
+  document.getElementById('nsScanInput').value = '';
+  updateNsSerialsCount();
+  renderNewSaleCart();
+}
+
+function removeNewSaleItem(idx) {
+  nsCart.splice(idx, 1);
+  renderNewSaleCart();
+}
+
+function renderNewSaleCart() {
+  const box = document.getElementById('nsItemsList');
+  const totalBefore = nsCart.reduce((s, i) => s + ((i.price || 0) * (i.qty || 0)), 0);
+  const discount = parseFloat(document.getElementById('nsDiscount').value) || 0;
+  const total = Math.max(0, totalBefore - discount);
+  document.getElementById('nsTotalDisplay').textContent = formatMoney(total);
+  if (!box) return;
+  if (nsCart.length === 0) {
+    box.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text2);font-size:0.82rem">لا توجد أصناف بعد — أضف صنفاً من فوق</div>';
     return;
   }
-  currentCart = [];
-  renderNewInvoiceCart();
-  const c = document.getElementById('newInvCustomer'); if (c) c.value = '';
-  const p = document.getElementById('newInvCustomerPhone'); if (p) p.value = '';
-  const d = document.getElementById('newInvDiscount'); if (d) d.value = '';
-  const pp = document.getElementById('newInvPartialPaid'); if (pp) pp.value = '';
-  const it = document.getElementById('newInvInvoiceType'); if (it) it.value = 'cash';
-  const pm = document.getElementById('newInvPaymentType'); if (pm) pm.value = 'cash';
-  toggleNewInvPartial();
-  showToast('تم بدء فاتورة جديدة من صفحة New Invoic');
+  box.innerHTML = `<table class="data-table" style="margin-bottom:4px"><thead><tr><th>المنتج</th><th>السعر</th><th>الكمية</th><th>الإجمالي</th><th>السيريالات</th><th></th></tr></thead><tbody>
+  ${nsCart.map((it, idx) => `<tr>
+    <td>${it.name}</td><td>${formatMoney(it.price)}</td><td>${it.qty}</td><td>${formatMoney(it.price * it.qty)}</td>
+    <td style="font-size:0.68rem;font-family:monospace">${it.serials.length ? it.serials.join(', ') : '<span style="color:var(--text2)">بدون سيريال</span>'}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="removeNewSaleItem(${idx})">🗑️</button></td>
+  </tr>`).join('')}</tbody></table>`;
 }
 
-function renderNewInvoiceProducts() {
-  const grid = document.getElementById('newInvProductGrid');
-  const input = document.getElementById('newInvSearch');
-  if (!grid || !input) return;
-  const search = (input.value || '').toLowerCase().trim();
-  let products = DB.products || [];
-  if (search) {
-    products = products.filter(p => {
-      if ((p.name || '').toLowerCase().includes(search)) return true;
-      if (String(p.id).includes(search)) return true;
-      if (p.hasSerial !== false) {
-        return DB.serials.some(s => s.productId === p.id && s.status === 'available' && (s.serial || '').toLowerCase().includes(search));
-      }
-      return false;
-    });
-  }
-  grid.innerHTML = products.map(p => {
-    const stock = getProductStock(p.id);
-    const disabled = stock === 0 ? 'opacity:.5;pointer-events:none;' : '';
-    return `<div class="product-card" style="${disabled}" onclick="addToNewInvoiceCart(${p.id})">
-      <div class="p-name">${p.name}</div>
-      <div class="p-price">${formatMoney(p.sellPrice || 0)}</div>
-      <div class="p-stock">متوفر: ${stock}</div>
-    </div>`;
-  }).join('') || '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text2)">لا توجد منتجات</div>';
-}
-
-function addToNewInvoiceCart(productId) {
-  addToCart(productId);
-  renderNewInvoiceCart();
-}
-
-function newInvChangeQty(idx, delta) {
-  changeCartQty(idx, delta);
-  renderNewInvoiceCart();
-}
-
-function newInvRemove(idx) {
-  removeFromCart(idx);
-  renderNewInvoiceCart();
-}
-
-function toggleNewInvPartial() {
-  const type = document.getElementById('newInvInvoiceType')?.value || 'cash';
-  const pay = document.getElementById('newInvPaymentType')?.value || 'cash';
-  const row = document.getElementById('newInvPartialRow');
-  if (!row) return;
-  row.style.display = (type === 'ajel' && pay !== 'installment') ? 'block' : 'none';
-}
-
-function renderNewInvoiceCart() {
-  const box = document.getElementById('newInvCartItems');
-  if (!box) return;
-  if (!currentCart || currentCart.length === 0) {
-    box.innerHTML = '<div class="empty-state"><div class="icon">🛒</div><p>السلة فارغة</p></div>';
-  } else {
-    box.innerHTML = currentCart.map((item, idx) => `<div class="cart-item" style="display:flex;align-items:center;gap:6px">
-      <div style="flex:1">
-        <div class="cart-item-name">${item.name}</div>
-        <div class="cart-item-price">${formatMoney(item.price)} × ${item.qty}</div>
-      </div>
-      <div class="qty-controls">
-        <button class="qty-btn" onclick="newInvChangeQty(${idx},-1)">-</button>
-        <span style="min-width:20px;text-align:center">${item.qty}</span>
-        <button class="qty-btn" onclick="newInvChangeQty(${idx},1)">+</button>
-      </div>
-      <button class="cart-remove" onclick="newInvRemove(${idx})">🗑️</button>
-    </div>`).join('');
-  }
-  const discount = parseFloat(document.getElementById('newInvDiscount')?.value) || 0;
-  const subtotal = (currentCart || []).reduce((s, i) => s + ((i.price || 0) * (i.qty || 0)), 0);
+function saveNewSaleInvoice() {
+  if (nsCart.length === 0) { showToast('أضف صنفاً على الأقل', 'error'); return; }
+  const customerId = document.getElementById('nsCustomer').value;
+  const selectedCustomer = customerId ? DB.customers.find(c => String(c.id) === String(customerId)) : null;
+  const customer = selectedCustomer?.name || document.getElementById('nsCustomerSearch').value.trim() || 'عميل نقدي';
+  const customerPhone = document.getElementById('nsCustomerPhone').value.trim();
+  const paymentType = document.getElementById('nsPaymentMethod').value;
+  const invoiceType = document.getElementById('nsInvoiceType').value;
+  const discount = parseFloat(document.getElementById('nsDiscount').value) || 0;
+  const subtotal = nsCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const total = Math.max(0, subtotal - discount);
-  const count = (currentCart || []).reduce((s, i) => s + (i.qty || 0), 0);
-  const c = document.getElementById('newInvCount'); if (c) c.textContent = count;
-  const d = document.getElementById('newInvDiscountShow'); if (d) d.textContent = formatMoney(discount);
-  const t = document.getElementById('newInvTotal'); if (t) t.textContent = formatMoney(total);
-}
+  const partialPaidInput = parseFloat(document.getElementById('nsPartialPaid').value) || 0;
+  const partialPaid = invoiceType === 'ajel' ? Math.max(0, partialPaidInput) : 0;
+  if (partialPaid > total) { showToast('المدفوع أكبر من الإجمالي', 'error'); return; }
+  const remainingAmount = invoiceType === 'ajel' ? Math.max(0, total - partialPaid) : 0;
+  const invoiceId = 'INV-' + String(DB.settings.nextInvoiceNum).padStart(6, '0');
+  DB.settings.nextInvoiceNum++;
 
-function completeSaleFromNewInvoice() {
-  if (!currentCart || currentCart.length === 0) { showToast('السلة فارغة', 'error'); return; }
-  document.getElementById('posModeVal').value = 'sale';
-  document.getElementById('cartCustomer').value = document.getElementById('newInvCustomer')?.value || '';
-  document.getElementById('cartCustomerPhone').value = document.getElementById('newInvCustomerPhone')?.value || '';
-  document.getElementById('cartInvoiceType').value = document.getElementById('newInvInvoiceType')?.value || 'cash';
-  document.getElementById('cartPaymentType').value = document.getElementById('newInvPaymentType')?.value || 'cash';
-  document.getElementById('discountInput').value = document.getElementById('newInvDiscount')?.value || '0';
-  const pp = document.getElementById('salePartialPaid');
-  if (pp) pp.value = document.getElementById('newInvPartialPaid')?.value || '';
-  onPaymentTypeChange();
-  onSaleInvoiceTypeChange();
-  completeSale(true);
+  const actualCostByProduct = {};
+  nsCart.forEach(item => {
+    if (item.noSerial) {
+      const c = consumeNoSerialCost(item.productId, item.qty);
+      actualCostByProduct[item.productId] = c.unitCost || 0;
+    } else {
+      let serialCost = 0;
+      (item.serials || []).forEach(sn => {
+        const sr = DB.serials.find(x => x.serial === sn && x.productId === item.productId);
+        serialCost += Number(sr && sr.purchasePrice != null ? sr.purchasePrice : item.buyPrice || 0);
+      });
+      actualCostByProduct[item.productId] = item.qty > 0 ? serialCost / item.qty : (item.buyPrice || 0);
+    }
+  });
+  const profit = nsCart.reduce((sum, item) => sum + ((item.price - Number(actualCostByProduct[item.productId] || 0)) * item.qty), 0) - discount;
+
+  nsCart.forEach(item => {
+    if (item.noSerial) {
+      const p = DB.products.find(x => x.id === item.productId);
+      if (p) p.stockQty = Math.max(0, (p.stockQty || 0) - item.qty);
+    } else {
+      item.serials.forEach(serial => {
+        const s = DB.serials.find(x => x.serial === serial && x.productId === item.productId);
+        if (s) { s.status = 'sold'; s.saleInvoiceId = invoiceId; }
+      });
+    }
+    addStockMovement(item.productId, 'out', item.qty, `بيع - فاتورة ${invoiceId}`);
+  });
+
+  const invoice = {
+    id: invoiceId,
+    date: new Date().toISOString(),
+    customer,
+    customerPhone,
+    items: nsCart.map(item => ({
+      productId: item.productId,
+      name: item.name,
+      qty: item.qty,
+      price: item.price,
+      buyPrice: Number(actualCostByProduct[item.productId] || 0),
+      serials: item.serials
+    })),
+    subtotal,
+    discount,
+    total,
+    profit,
+    payment: paymentType,
+    invoiceType,
+    paidAmount: partialPaid,
+    remainingAmount,
+    user: currentUser ? currentUser.username : 'system'
+  };
+
+  DB.saleInvoices.push(invoice);
+  autoSaveCustomer(customer, customerPhone);
+  if (invoiceType === 'cash') addCashEntry('in', total, paymentType, `بيع - ${customer}`);
+  if (invoiceType === 'ajel' && partialPaid > 0) addCashEntry('in', partialPaid, paymentType, `دفعة مقدمة بيع آجل - ${customer} - ${invoiceId}`);
+  logActivity('فاتورة بيع', `فاتورة #${invoiceId} - ${formatMoney(total)}`);
+  saveDB();
+  closeModal('newSaleModal');
   renderInvoices();
-  renderNewInvoiceProducts();
-  renderNewInvoiceCart();
-  document.getElementById('newInvCustomer').value = '';
-  document.getElementById('newInvCustomerPhone').value = '';
-  document.getElementById('newInvDiscount').value = '';
-  document.getElementById('newInvPartialPaid').value = '';
+  printInvoice(invoice);
+  showToast('✅ تم إتمام البيع بنجاح');
 }
 
 function ensureSaleIssueButtonBinding() {
@@ -7213,7 +7430,6 @@ function confirmSerialPicker() {
   
   closeModal('serialPickerModal');
   renderCart();
-  if (currentPage === 'newinvoice') renderNewInvoiceCart();
 }
 
 function renderCart() {
