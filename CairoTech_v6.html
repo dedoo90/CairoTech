@@ -3138,6 +3138,61 @@ function getSaleInvoiceDue(inv) {
   return Math.max(0, (Number(inv.total) || 0) - paid);
 }
 
+function getSupplierOutstanding(supplierId) {
+  const s = DB.suppliers.find(x => x.id == supplierId);
+  if (!s) return 0;
+
+  const purchasesTotal = DB.purchaseInvoices
+    .filter(p => p.supplierId == s.id || p.supplier === s.name)
+    .filter(p => p.invoiceType === 'ajel')
+    .reduce((sum, p) => sum + (p.total || 0), 0);
+
+  const supplierPayments = DB.supplierPayments
+    .filter(sp => sp.supplierId == s.id && sp.type === 'payment')
+    .reduce((sum, sp) => sum + (sp.amount || 0), 0);
+
+  const asPaid = (DB.asPayments || [])
+    .filter(p => p.entityId == s.id && p.entityType === 'supplier')
+    .reduce((sum, p) => sum + (p.direction === 'receive' ? (p.amount || 0) : -(p.amount || 0)), 0);
+
+  const vouchersNet = (DB.vouchers || [])
+    .filter(v => v.partyId == s.id && v.partyType === 'supplier')
+    .reduce((sum, v) => sum + (v.type === 'payment' ? -(v.amount || 0) : (v.amount || 0)), 0);
+
+  const purchaseReturns = (DB.returns || [])
+    .filter(r => DB.purchaseInvoices.find(p => p.id === r.invoiceId && p.supplierId == s.id && p.invoiceType === 'ajel'))
+    .reduce((sum, r) => sum + (r.refund || 0), 0);
+
+  return (s.balance || 0) + purchasesTotal - supplierPayments - asPaid + vouchersNet - purchaseReturns;
+}
+
+function getCustomerOutstanding(customerId) {
+  const c = DB.customers.find(x => x.id == customerId);
+  if (!c) return 0;
+  const ajelDue = DB.saleInvoices
+    .filter(inv => inv.customer === c.name && inv.invoiceType === 'ajel')
+    .reduce((sum, inv) => sum + getSaleInvoiceDue(inv), 0);
+  const asPaymentsNet = (DB.asPayments || [])
+    .filter(p => p.entityId == c.id && p.entityType === 'customer')
+    .reduce((sum, p) => sum + (p.direction === 'pay' ? (p.amount || 0) : -(p.amount || 0)), 0);
+  const vchReceipts = (DB.vouchers || [])
+    .filter(v => v.partyId == c.id && v.partyType === 'customer' && v.type === 'receipt')
+    .reduce((sum, v) => sum + (v.amount || 0), 0);
+  const vchPayments = (DB.vouchers || [])
+    .filter(v => v.partyId == c.id && v.partyType === 'customer' && v.type === 'payment')
+    .reduce((sum, v) => sum + (v.amount || 0), 0);
+  return (c.balance || 0) + ajelDue - asPaymentsNet - vchReceipts + vchPayments;
+}
+
+function getEmployeeOutstanding(employeeId) {
+  const e = DB.employees.find(x => x.id == employeeId);
+  if (!e) return 0;
+  const asNet = (DB.asPayments || [])
+    .filter(p => p.entityId == e.id && p.entityType === 'employee')
+    .reduce((sum, p) => sum + (p.direction === 'receive' ? (p.amount || 0) : -(p.amount || 0)), 0);
+  return (e.balance || 0) + asNet;
+}
+
 function isToday(dateStr) {
   const d = new Date(dateStr);
   const today = new Date();
@@ -4063,12 +4118,12 @@ function renderPurchases(filter = '') {
   DB.suppliers.forEach(s => {
     const suppPurchases = purchases.filter(p => p.supplierId == s.id);
     const suppTotal = suppPurchases.reduce((sum, p) => sum + (p.total || 0), 0);
-    const suppDebt = suppPurchases.filter(p => p.invoiceType === 'ajel').reduce((sum, p) => sum + (p.total || 0), 0);
+    const suppDebt = getSupplierOutstanding(s.id);
     cardsHtml += `<div class="stat-card" style="padding:12px">
       <div style="font-size:0.9rem;font-weight:700">${s.name}</div>
       <div style="font-size:0.75rem;color:var(--text2)">${s.phone || '-'}</div>
       <div style="margin-top:8px;display:flex;justify-content:space-between"><span style="font-size:0.75rem">المشتريات:</span><span style="font-weight:700">${formatMoney(suppTotal)}</span></div>
-      <div style="display:flex;justify-content:space-between"><span style="font-size:0.75rem">الديون:</span><span style="font-weight:700;color:var(--red)">${formatMoney(suppDebt + (s.balance || 0))}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="font-size:0.75rem">الديون:</span><span style="font-weight:700;color:var(--red)">${formatMoney(suppDebt)}</span></div>
     </div>`;
   });
   cardsHtml += '</div>';
@@ -4324,13 +4379,7 @@ function saveSupplier() {
 function renderSuppliers() {
   const tbody = document.getElementById('suppliersTbody');
   tbody.innerHTML = DB.suppliers.map((s, idx) => {
-    const purInvoices = DB.purchaseInvoices.filter(p => p.supplierId == s.id);
-    const ajelDebt = purInvoices.filter(p => p.invoiceType === 'ajel').reduce((sum, p) => sum + (p.total || 0), 0);
-    const payments = DB.supplierPayments.filter(sp => sp.supplierId == s.id && sp.type === 'payment').reduce((sum, sp) => sum + (sp.amount || 0), 0);
-    const asPaid = (DB.asPayments || []).filter(p => p.entityId == s.id && p.entityType === 'supplier').reduce((sum, p) => sum + (p.direction === 'receive' ? (p.amount || 0) : -(p.amount || 0)), 0);
-    const vchPaid = (DB.vouchers || []).filter(v => v.partyId == s.id && v.partyType === 'supplier' && v.type === 'payment').reduce((sum, v) => sum + (v.amount || 0), 0);
-    const vchReceived = (DB.vouchers || []).filter(v => v.partyId == s.id && v.partyType === 'supplier' && v.type === 'receipt').reduce((sum, v) => sum + (v.amount || 0), 0);
-    const debt = (s.balance || 0) + ajelDebt - payments - asPaid - vchPaid + vchReceived;
+    const debt = getSupplierOutstanding(s.id);
     return `<tr>
       <td>${idx + 1}</td>
       <td style="font-weight:700;cursor:pointer;color:var(--accent)" onclick="viewSupplierStatement(${s.id})">${s.name} 📋</td>
@@ -4377,7 +4426,7 @@ function viewSupplierStatement(supplierId) {
       date: p.date,
       desc: `📦 فاتورة شراء #${p.id}`,
       detail: itemsSummary,
-      debit: p.total || 0,
+      debit: p.invoiceType === 'ajel' ? (p.total || 0) : 0,
       credit: 0,
       badge: `<span class="badge badge-blue">شراء</span>`,
       bg: 'rgba(0,102,255,0.05)'
@@ -4440,17 +4489,7 @@ function viewSupplierStatement(supplierId) {
 
   transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  // Reconstruct true opening balance:
-  // Old code used to add ajel purchases to s.balance AND track them in purchaseInvoices → double count
-  // Old code also subtracted payments from s.balance AND tracked in supplierPayments → double subtract
-  // Fix: openingBal = s.balance - sum(ajel from purchaseInvoices) + sum(payments from supplierPayments)
-  const ajelFromInv = DB.purchaseInvoices
-    .filter(p => p.supplierId == s.id && p.invoiceType === 'ajel')
-    .reduce((sum, p) => sum + (p.total || 0), 0);
-  const paidFromLog = DB.supplierPayments
-    .filter(sp => sp.supplierId == s.id && sp.type === 'payment')
-    .reduce((sum, sp) => sum + (sp.amount || 0), 0);
-  const openingBal = Math.max(0, (s.balance || 0) - ajelFromInv + paidFromLog);
+  const openingBal = s.balance || 0;
 
   // الرصيد التراكمي
   let running = openingBal;
@@ -4532,12 +4571,7 @@ function openSupplierPaymentModal(supplierId) {
   const s = DB.suppliers.find(x => x.id === supplierId);
   if (!s) return;
 
-  const ajelDebt = DB.purchaseInvoices.filter(p => p.supplierId == s.id && p.invoiceType === 'ajel').reduce((sum, p) => sum + (p.total || 0), 0);
-  const payments = DB.supplierPayments.filter(sp => sp.supplierId == s.id && sp.type === 'payment').reduce((sum, sp) => sum + (sp.amount || 0), 0);
-  const asPaid = (DB.asPayments || []).filter(p => p.entityId == s.id && p.entityType === 'supplier').reduce((sum, p) => sum + (p.direction === 'receive' ? (p.amount || 0) : -(p.amount || 0)), 0);
-  const vchPaid = (DB.vouchers || []).filter(v => v.partyId == s.id && v.partyType === 'supplier' && v.type === 'payment').reduce((sum, v) => sum + (v.amount || 0), 0);
-  const vchReceived = (DB.vouchers || []).filter(v => v.partyId == s.id && v.partyType === 'supplier' && v.type === 'receipt').reduce((sum, v) => sum + (v.amount || 0), 0);
-  const debt = (s.balance || 0) + ajelDebt - payments - asPaid - vchPaid + vchReceived;
+  const debt = getSupplierOutstanding(s.id);
   
   document.getElementById('suppPaySupplierId').value = supplierId;
   document.getElementById('suppPayName').value = s.name;
@@ -4633,11 +4667,7 @@ function renderCustomersTable(filter = '') {
   if (filter) customers = customers.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()) || (c.phone && c.phone.includes(filter)));
   
   tbody.innerHTML = customers.map((c, idx) => {
-    const ajelDebt = DB.saleInvoices.filter(inv => inv.customer === c.name && inv.invoiceType === 'ajel').reduce((sum, inv) => sum + getSaleInvoiceDue(inv), 0);
-    const asPaymentsNet = (DB.asPayments || []).filter(p => p.entityId == c.id && p.entityType === 'customer').reduce((sum, p) => sum + (p.direction === 'pay' ? (p.amount || 0) : -(p.amount || 0)), 0);
-    const vchReceipts = (DB.vouchers || []).filter(v => v.partyId == c.id && v.partyType === 'customer' && v.type === 'receipt').reduce((sum, v) => sum + (v.amount || 0), 0);
-    const vchPayments = (DB.vouchers || []).filter(v => v.partyId == c.id && v.partyType === 'customer' && v.type === 'payment').reduce((sum, v) => sum + (v.amount || 0), 0);
-    const debt = (c.balance || 0) + ajelDebt - asPaymentsNet - vchReceipts + vchPayments;
+    const debt = getCustomerOutstanding(c.id);
     return `<tr>
       <td>${idx + 1}</td>
       <td>${c.name}</td>
@@ -4724,11 +4754,7 @@ function viewCustomerStatement(customerName) {
   
   const invoices = DB.saleInvoices.filter(inv => inv.customer === customerName);
   const totalPurchases = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
-  const ajelDebt = invoices.filter(inv => inv.invoiceType === 'ajel').reduce((sum, inv) => sum + getSaleInvoiceDue(inv), 0);
-  const asPaymentsNet = (DB.asPayments || []).filter(p => p.entityId == customer.id && p.entityType === 'customer').reduce((sum, p) => sum + (p.direction === 'pay' ? (p.amount || 0) : -(p.amount || 0)), 0);
-  const vchReceipts = (DB.vouchers || []).filter(v => v.partyId == customer.id && v.partyType === 'customer' && v.type === 'receipt').reduce((sum, v) => sum + (v.amount || 0), 0);
-  const vchPayments = (DB.vouchers || []).filter(v => v.partyId == customer.id && v.partyType === 'customer' && v.type === 'payment').reduce((sum, v) => sum + (v.amount || 0), 0);
-  const debt = (customer.balance || 0) + ajelDebt - asPaymentsNet - vchReceipts + vchPayments;
+  const debt = getCustomerOutstanding(customer.id);
   const totalPaid = Math.max(0, totalPurchases + (customer.balance || 0) - debt);
   
   let html = `
@@ -5915,9 +5941,12 @@ function saveEmployee() {
     id: Date.now(),
     name,
     position,
+    phone,
+    phone2,
     salary,
     bonus: 0,
-    lastPaid: null
+    lastPaid: null,
+    balance: 0
   });
   
   saveDB();
@@ -6127,8 +6156,7 @@ function renderFinancial() {
   // Calculate all financial data
   const totalAssets = DB.products.reduce((sum, p) => sum + (p.buyPrice || 0) * getProductStock(p.id), 0);
   const totalReceivables = DB.customers.reduce((sum, c) => {
-    const customerDebt = (c.balance || 0) + DB.saleInvoices.filter(inv => inv.customer === c.name && inv.invoiceType === 'ajel').reduce((s, inv) => s + (inv.total || 0), 0);
-    return sum + customerDebt;
+    return sum + getCustomerOutstanding(c.id);
   }, 0);
   
   const treasuryBalance = DB.cashFlow.reduce((sum, c) => sum + (c.type === 'in' ? (c.amount || 0) : -(c.amount || 0)), 0);
@@ -6139,8 +6167,7 @@ function renderFinancial() {
   const totalPurchases = DB.purchaseInvoices.reduce((sum, p) => sum + (p.total || 0), 0);
   
   const totalPayables = DB.suppliers.reduce((sum, s) => {
-    const supplierDebt = (s.balance || 0) + DB.purchaseInvoices.filter(p => p.supplierId == s.id && p.invoiceType === 'ajel').reduce((d, inv) => d + (inv.total || 0), 0);
-    return sum + supplierDebt;
+    return sum + getSupplierOutstanding(s.id);
   }, 0);
   
   const installmentRemaining = DB.installments.filter(i => i.status === 'active').reduce((sum, i) => sum + (i.remaining || 0), 0);
@@ -7112,7 +7139,7 @@ function printInvoice(invoice) {
   const html = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px">
     <div style="text-align:center;margin-bottom:18px">
       <div style="font-size:1.5rem;font-weight:900;color:var(--accent)">⚡ CairoTech</div>
-      <div style="font-size:0.85rem;color:var(--text2)">فاتورة مبيعات #${invoice.id}</div>
+      <div style="font-size:0.85rem;color:var(--text2)">فاتورة بيع #${invoice.id}</div>
     </div>
     <div class="grid-2" style="margin-bottom:14px;font-size:0.85rem">
       <div><strong>العميل:</strong> ${invoice.customer || '-'}</div>
@@ -7129,16 +7156,33 @@ function printInvoice(invoice) {
       </tr></thead>
       <tbody>${itemsHtml}</tbody>
     </table>
-    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:8px;padding:10px 14px;font-size:1rem;font-weight:700;margin-bottom:8px">
-      <span>الإجمالي قبل الخصم:</span>
-      <span style="color:var(--accent)">${formatMoney(invoice.subtotal || 0)}</span>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;background:var(--surface2);border-radius:8px;padding:9px 12px;font-size:0.9rem">
+        <span>الإجمالي قبل الخصم</span>
+        <strong style="color:var(--accent)">${formatMoney(invoice.subtotal || 0)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;background:var(--surface2);border-radius:8px;padding:9px 12px;font-size:0.9rem">
+        <span>الخصم</span>
+        <strong style="color:#e53935">${formatMoney(invoice.discount || 0)}</strong>
+      </div>
+      ${invoice.invoiceType === 'ajel' ? `<div style="display:flex;justify-content:space-between;background:#e8f7ef;border-radius:8px;padding:9px 12px;font-size:0.9rem">
+        <span>المدفوع الآن</span>
+        <strong style="color:#00a854">${formatMoney(paidAmount)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;background:#fff3f3;border-radius:8px;padding:9px 12px;font-size:0.9rem">
+        <span>المتبقي</span>
+        <strong style="color:#e53935">${formatMoney(remainingAmount)}</strong>
+      </div>` : `<div style="display:flex;justify-content:space-between;background:#e8f7ef;border-radius:8px;padding:9px 12px;font-size:0.9rem">
+        <span>المدفوع</span>
+        <strong style="color:#00a854">${formatMoney(invoice.total || 0)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;background:var(--surface2);border-radius:8px;padding:9px 12px;font-size:0.9rem">
+        <span>طريقة الدفع</span>
+        <strong>${getPaymentLabel(invoice.payment)}</strong>
+      </div>`}
     </div>
-    ${invoice.discount > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;background:#fff3f3;border-radius:8px;padding:10px 14px;font-size:0.92rem;font-weight:700;color:#e53935;margin-bottom:8px"><span>الخصم:</span><span>- ${formatMoney(invoice.discount)}</span></div>` : ''}
-    ${invoice.invoiceType === 'ajel' ? `<div style="display:flex;justify-content:space-between;align-items:center;background:#e8f7ef;border-radius:8px;padding:10px 14px;font-size:0.92rem;font-weight:700;margin-bottom:8px"><span>المدفوع الآن:</span><span style="color:#00a854">${formatMoney(paidAmount)}</span></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;background:#fff3f3;border-radius:8px;padding:10px 14px;font-size:0.92rem;font-weight:700;margin-bottom:8px"><span>المتبقي:</span><span style="color:#e53935">${formatMoney(remainingAmount)}</span></div>` : ''}
-    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:8px;padding:10px 14px;font-size:1rem;font-weight:700">
-      <span>الإجمالي الكلي:</span>
-      <span style="color:var(--accent)">${formatMoney(invoice.total || 0)}</span>
+    <div style="display:flex;justify-content:space-between;font-size:1.1rem;font-weight:700;padding:10px;background:#f5f5f5;border-radius:8px">
+      <span>الإجمالي الكلي:</span><span style="color:#0066ff">${formatMoney(invoice.total || 0)}</span>
     </div>
     <div style="text-align:center;margin-top:14px;font-size:0.75rem;color:var(--text2)">شكراً لتعاملكم معنا</div>
   </div>`;
@@ -7757,7 +7801,7 @@ function renderUnifiedASCard(customer, supplier) {
       date: inv.date,
       desc: `📤 فاتورة بيع #${inv.id} — ${itemsSummary}`,
       saleDebit: inv.invoiceType === 'ajel' ? getSaleInvoiceDue(inv) : 0,
-      saleCredit: inv.invoiceType !== 'ajel' ? inv.total : 0,
+      saleCredit: 0,
       purDebit: 0, purCredit: 0,
       badge: '<span class="badge badge-blue">بيع</span>',
       bg: 'rgba(0,102,255,0.05)'
@@ -7773,7 +7817,7 @@ function renderUnifiedASCard(customer, supplier) {
       date: p.date,
       desc: `📥 فاتورة شراء #${p.id} — ${itemsSummary}`,
       saleDebit: 0, saleCredit: 0,
-      purDebit: p.total || 0, purCredit: 0,
+      purDebit: p.invoiceType === 'ajel' ? (p.total || 0) : 0, purCredit: 0,
       badge: '<span class="badge badge-yellow">شراء</span>',
       bg: 'rgba(249,168,37,0.05)'
     });
@@ -7834,8 +7878,8 @@ function renderUnifiedASCard(customer, supplier) {
   const totalSaleCredit = transactions.reduce((s, t) => s + t.saleCredit, 0);
   const totalPurDebit = transactions.reduce((s, t) => s + t.purDebit, 0);
   const totalPurCredit = transactions.reduce((s, t) => s + t.purCredit, 0);
-  const saleBalance = totalSaleDebit - totalSaleCredit; // >0 = owes us
-  const purBalance = totalPurDebit - totalPurCredit;   // >0 = we owe them
+  const saleBalance = getCustomerOutstanding(customer.id); // >0 = owes us
+  const purBalance = getSupplierOutstanding(supplier.id);  // >0 = we owe them
   const netBalance = saleBalance - purBalance;
 
   const rows = transactions.map(t => `<tr style="background:${t.bg}">
@@ -7929,7 +7973,7 @@ function renderASCard(entity, type) {
         date: inv.date,
         desc: `🧾 فاتورة بيع #${inv.id} — ${itemsSummary}`,
         debit: inv.invoiceType === 'ajel' ? getSaleInvoiceDue(inv) : 0,
-        credit: inv.invoiceType !== 'ajel' ? inv.total : 0,
+        credit: 0,
         type: 'invoice'
       });
     });
@@ -7941,7 +7985,7 @@ function renderASCard(entity, type) {
     (DB.vouchers || []).filter(v => v.partyId == entity.id && v.partyType === 'customer').forEach(v => {
       transactions.push({ date: v.date, desc: `سند ${v.type === 'receipt' ? 'قبض' : 'صرف'} #${v.id} — ${v.desc}`, debit: v.type === 'payment' ? v.amount : 0, credit: v.type === 'receipt' ? v.amount : 0, type: 'payment' });
     });
-    balance = transactions.reduce((s, t) => s + t.debit - t.credit, 0);
+    balance = getCustomerOutstanding(entity.id);
 
   } else if (type === 'supplier') {
     if ((entity.balance || 0) > 0) {
@@ -7958,30 +8002,30 @@ function renderASCard(entity, type) {
       const itemsSummary = p.items && p.items.length > 0
         ? p.items.map(i => `${i.name} ×${i.qty}`).join('، ')
         : (DB.products.find(prod => prod.id === p.productId)?.name || '-');
-      transactions.push({ date: p.date, desc: `🛍️ فاتورة شراء #${p.id} — ${itemsSummary}`, debit: p.total || 0, credit: 0, type: 'invoice' });
+      transactions.push({ date: p.date, desc: `🛍️ فاتورة شراء #${p.id} — ${itemsSummary}`, debit: p.invoiceType === 'ajel' ? (p.total || 0) : 0, credit: 0, type: 'invoice' });
     });
     DB.supplierPayments.filter(sp => sp.supplierId == entity.id && sp.type === 'payment').forEach(sp => {
       transactions.push({ date: sp.date, desc: sp.desc || 'دفعة للمورد', debit: 0, credit: sp.amount, type: 'payment' });
     });
     DB.asPayments = DB.asPayments || [];
     DB.asPayments.filter(p => p.entityId == entity.id && p.entityType === 'supplier').forEach(p => {
-      transactions.push({ date: p.date, desc: p.note || 'دفعة', debit: p.direction === 'pay' ? p.amount : 0, credit: p.direction === 'receive' ? p.amount : 0, type: 'payment', paymentId: p.id });
+      transactions.push({ date: p.date, desc: p.note || 'دفعة', debit: p.direction === 'pay' ? (p.amount || 0) : 0, credit: p.direction === 'receive' ? (p.amount || 0) : 0, type: 'payment', paymentId: p.id });
     });
     (DB.vouchers || []).filter(v => v.partyId == entity.id && v.partyType === 'supplier').forEach(v => {
       transactions.push({ date: v.date, desc: `سند ${v.type === 'payment' ? 'صرف' : 'قبض'} #${v.id} — ${v.desc}`, debit: v.type === 'receipt' ? v.amount : 0, credit: v.type === 'payment' ? v.amount : 0, type: 'payment' });
     });
-    balance = transactions.reduce((s, t) => s + t.debit - t.credit, 0);
+    balance = getSupplierOutstanding(entity.id);
 
   } else if (type === 'employee') {
     // Salary logs
-    DB.salaryLog.filter(s => s.employeeId === entity.id || s.employee === entity.name).forEach(s => {
-      transactions.push({ date: s.date, desc: `راتب ${s.employee}`, debit: 0, credit: s.total || 0, type: 'salary' });
+    DB.salaryLog.filter(s => s.employeeId === entity.id || s.employeeName === entity.name || s.employee === entity.name).forEach(s => {
+      transactions.push({ date: s.date, desc: `راتب ${s.employeeName || entity.name}`, debit: 0, credit: (s.salary || 0) + (s.bonus || 0), type: 'salary' });
     });
     DB.asPayments = DB.asPayments || [];
     DB.asPayments.filter(p => p.entityId === entity.id && p.entityType === 'employee').forEach(p => {
-      transactions.push({ date: p.date, desc: p.note || 'دفعة', debit: p.direction === 'pay' ? p.amount : 0, credit: p.direction === 'receive' ? p.amount : 0, type: 'payment' });
+      transactions.push({ date: p.date, desc: p.note || 'دفعة', debit: p.direction === 'pay' ? (p.amount || 0) : 0, credit: p.direction === 'receive' ? (p.amount || 0) : 0, type: 'payment' });
     });
-    balance = transactions.reduce((s, t) => s + t.credit - t.debit, 0); // employee: we owe them salaries
+    balance = getEmployeeOutstanding(entity.id);
   }
 
   // Sort by date desc
@@ -8322,16 +8366,9 @@ function onVoucherPartySelect() {
   // حساب الرصيد
   let balance = 0;
   if (partyType === 'customer') {
-    const invoiceDebt = DB.saleInvoices.filter(inv => inv.customer === entity.name && inv.invoiceType === 'ajel').reduce((s, inv) => s + getSaleInvoiceDue(inv), 0);
-    const payments = (DB.asPayments || []).filter(p => p.entityId == entity.id && p.entityType === 'customer').reduce((s, p) => s + (p.direction === 'pay' ? p.amount : -p.amount), 0);
-    const vchPayments = (DB.vouchers || []).filter(v => v.partyId == entity.id && v.partyType === 'customer').reduce((s, v) => s + (v.type === 'receipt' ? -v.amount : v.amount), 0);
-    balance = (entity.balance || 0) + invoiceDebt - payments + vchPayments;
+    balance = getCustomerOutstanding(entity.id);
   } else {
-    const purchaseDebt = DB.purchaseInvoices.filter(p => p.supplierId == entity.id && p.invoiceType === 'ajel').reduce((s, p) => s + p.total, 0);
-    const payments = DB.supplierPayments.filter(p => p.supplierId == entity.id && p.type === 'payment').reduce((s, p) => s + p.amount, 0);
-    const asPaid = (DB.asPayments || []).filter(p => p.entityId == entity.id && p.entityType === 'supplier').reduce((s, p) => s + (p.direction === 'receive' ? p.amount : -p.amount), 0);
-    const vchPayments = (DB.vouchers || []).filter(v => v.partyId == entity.id && v.partyType === 'supplier').reduce((s, v) => s + (v.type === 'payment' ? -v.amount : v.amount), 0);
-    balance = (entity.balance || 0) + purchaseDebt - payments - asPaid + vchPayments;
+    balance = getSupplierOutstanding(entity.id);
   }
 
   const balanceColor = balance > 0 ? 'var(--red)' : 'var(--green)';
@@ -8573,6 +8610,80 @@ function numberToArabicWords(n) {
   return result.trim();
 }
 
+function runStrictBalanceAudit() {
+  const issues = [];
+
+  // Suppliers: compare unified function vs statement-style reconstruction
+  DB.suppliers.forEach(s => {
+    const unified = getSupplierOutstanding(s.id);
+    const opening = s.balance || 0;
+    const invAjel = DB.purchaseInvoices
+      .filter(p => (p.supplierId == s.id || p.supplier === s.name) && p.invoiceType === 'ajel')
+      .reduce((sum, p) => sum + (p.total || 0), 0);
+    const payLog = DB.supplierPayments
+      .filter(sp => sp.supplierId == s.id && sp.type === 'payment')
+      .reduce((sum, sp) => sum + (sp.amount || 0), 0);
+    const asNet = (DB.asPayments || [])
+      .filter(p => p.entityId == s.id && p.entityType === 'supplier')
+      .reduce((sum, p) => sum + (p.direction === 'receive' ? (p.amount || 0) : -(p.amount || 0)), 0);
+    const vouchersNet = (DB.vouchers || [])
+      .filter(v => v.partyId == s.id && v.partyType === 'supplier')
+      .reduce((sum, v) => sum + (v.type === 'payment' ? -(v.amount || 0) : (v.amount || 0)), 0);
+    const returns = (DB.returns || [])
+      .filter(r => DB.purchaseInvoices.find(p => p.id === r.invoiceId && p.supplierId == s.id && p.invoiceType === 'ajel'))
+      .reduce((sum, r) => sum + (r.refund || 0), 0);
+
+    const reconstructed = opening + invAjel - payLog - asNet + vouchersNet - returns;
+    if (Math.abs(unified - reconstructed) > 0.01) {
+      issues.push(`مورد: ${s.name} | موحد=${unified.toFixed(2)} | معاد تكوين=${reconstructed.toFixed(2)}`);
+    }
+    if (!Number.isFinite(unified)) issues.push(`مورد: ${s.name} | رصيد غير صالح`);
+  });
+
+  // Customers
+  DB.customers.forEach(c => {
+    const unified = getCustomerOutstanding(c.id);
+    const invDue = DB.saleInvoices
+      .filter(inv => inv.customer === c.name && inv.invoiceType === 'ajel')
+      .reduce((sum, inv) => sum + getSaleInvoiceDue(inv), 0);
+    const asNet = (DB.asPayments || [])
+      .filter(p => p.entityId == c.id && p.entityType === 'customer')
+      .reduce((sum, p) => sum + (p.direction === 'pay' ? (p.amount || 0) : -(p.amount || 0)), 0);
+    const vchReceipts = (DB.vouchers || [])
+      .filter(v => v.partyId == c.id && v.partyType === 'customer' && v.type === 'receipt')
+      .reduce((sum, v) => sum + (v.amount || 0), 0);
+    const vchPayments = (DB.vouchers || [])
+      .filter(v => v.partyId == c.id && v.partyType === 'customer' && v.type === 'payment')
+      .reduce((sum, v) => sum + (v.amount || 0), 0);
+    const reconstructed = (c.balance || 0) + invDue - asNet - vchReceipts + vchPayments;
+    if (Math.abs(unified - reconstructed) > 0.01) {
+      issues.push(`عميل: ${c.name} | موحد=${unified.toFixed(2)} | معاد تكوين=${reconstructed.toFixed(2)}`);
+    }
+    if (!Number.isFinite(unified)) issues.push(`عميل: ${c.name} | رصيد غير صالح`);
+  });
+
+  // Employees
+  DB.employees.forEach(e => {
+    const unified = getEmployeeOutstanding(e.id);
+    const asNet = (DB.asPayments || [])
+      .filter(p => p.entityId == e.id && p.entityType === 'employee')
+      .reduce((sum, p) => sum + (p.direction === 'receive' ? (p.amount || 0) : -(p.amount || 0)), 0);
+    const reconstructed = (e.balance || 0) + asNet;
+    if (Math.abs(unified - reconstructed) > 0.01) {
+      issues.push(`موظف: ${e.name} | موحد=${unified.toFixed(2)} | معاد تكوين=${reconstructed.toFixed(2)}`);
+    }
+    if (!Number.isFinite(unified)) issues.push(`موظف: ${e.name} | رصيد غير صالح`);
+  });
+
+  if (issues.length) {
+    console.warn('Balance audit issues:', issues);
+    showToast(`⚠️ تم العثور على ${issues.length} ملاحظة في تدقيق الأرصدة (تفاصيل في Console)`, 'error');
+  } else {
+    console.info('Balance audit passed with no mismatches.');
+    showToast('✅ تدقيق الأرصدة: جميع المعادلات متطابقة', 'success');
+  }
+}
+
 function exportVouchersCSV() {
   DB.vouchers = DB.vouchers || [];
   let csv = 'رقم السند,التاريخ,النوع,الطرف,نوع الطرف,البيان,طريقة الدفع,المبلغ,بواسطة\n';
@@ -8626,6 +8737,9 @@ function initApp() {
   // Set default warranty date
   const warDate = document.getElementById('warPurchaseDate');
   if (warDate) warDate.valueAsDate = new Date();
+
+  // Strict cross-module balance audit on real user data
+  runStrictBalanceAudit();
 }
 
 // ================= الوضع الليلي =================
@@ -9152,7 +9266,7 @@ function filterBroadcast(type) {
     broadcastContacts = broadcastContacts.filter(c => {
       if (c.type === 'customer') {
         const cust = DB.customers.find(x => x.id === c.id);
-        const debt = (cust?.balance || 0) + DB.saleInvoices.filter(inv => inv.customer === cust?.name && inv.invoiceType === 'ajel').reduce((s, inv) => s + getSaleInvoiceDue(inv), 0);
+        const debt = cust ? getCustomerOutstanding(cust.id) : 0;
         return debt > 0;
       }
       return false;
