@@ -1001,7 +1001,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
         <div class="page-title">🧾 New Invoic</div>
         <div class="table-actions">
           <input class="search-input" type="text" placeholder="بحث بالعميل/رقم الفاتورة..." oninput="renderInvoices(this.value)">
-          <button class="btn btn-accent btn-sm" onclick="openNewInvoiceModal()">➕ فاتورة بيع جديدة</button>
+          <button class="btn btn-accent btn-sm" onclick="startNewInvoiceFromPage()">➕ فاتورة بيع جديدة</button>
         </div>
       </div>
       <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
@@ -1012,7 +1012,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
       <div class="table-container">
         <div class="table-header">
           <div class="table-title">📋 فواتير البيع</div>
-          <button class="btn btn-outline btn-sm" onclick="openNewInvoiceModal()">🧾 إنشاء فاتورة</button>
+          <button class="btn btn-outline btn-sm" onclick="startNewInvoiceFromPage()">🧾 إنشاء فاتورة</button>
         </div>
         <div class="overflow-x"><table class="data-table">
           <thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>المنتجات</th><th>الإجمالي</th><th>نوع الفاتورة</th><th>طريقة الدفع</th><th>البائع</th><th>إجراءات</th></tr></thead>
@@ -4857,6 +4857,11 @@ function handleCompleteAction() {
 
 function openNewInvoiceModal() {
   openSaleIssueModal();
+}
+
+function startNewInvoiceFromPage() {
+  showPage('pos');
+  showToast('ابدأ بإضافة الأصناف أولاً ثم اضغط "New Invoic" أو "إتمام البيع"', 'success');
 }
 
 function ensureSaleIssueButtonBinding() {
