@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>CairoTech - نظام الإدارة الاحترافي بالسيريالات</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Noto+Kufi+Arabic:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;700;800&family=Tajawal:wght@400;500;700;800&family=Noto+Kufi+Arabic:wght@400;600;700&display=swap');
 :root {
   --bg:#f0f4f8; --surface:#ffffff; --surface2:#e8edf3; --border:#c8d6e5;
   --accent:#0066ff; --accent2:#0044cc; --green:#00a854; --red:#e53935;
   --yellow:#f9a825; --purple:#7c3aed; --orange:#e65100;
   --text:#000000; --text2:#374151; --glow:0 0 20px rgba(0,102,255,0.15);
-  --app-font:'Tajawal','Noto Kufi Arabic','Segoe UI','Tahoma',Arial,sans-serif;
+  --app-font:'Cairo','Tajawal','Noto Kufi Arabic','Segoe UI','Tahoma',Arial,sans-serif;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html{font-size:16px;}
@@ -704,6 +704,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
   <div class="nav-dropdown" id="dropdown-sales">
     <div class="nav-dropdown-header">🛒 الفواتير والمبيعات</div>
     <div class="nav-dropdown-item" data-page="pos"><span class="icon">💳</span> نقطة البيع (POS)</div>
+    <div class="nav-dropdown-item" data-page="newinvoice"><span class="icon">🧾</span> New Invoic</div>
     <div class="nav-dropdown-item" data-page="invoices"><span class="icon">🧾</span> أرشيف الفواتير</div>
     <div class="nav-dropdown-item" data-page="installments"><span class="icon">📆</span> التقسيط</div>
     <div class="nav-dropdown-item" data-page="returns"><span class="icon">↩️</span> المرتجعات</div>
@@ -761,7 +762,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
   </div>
 
   <div class="nav-dropdown" id="dropdown-employees">
-    <div class="nav-dropdown-header">👨??? الموظفين</div>
+  <div class="nav-dropdown-header">👨‍💼 الموظفين</div>
     <div class="nav-dropdown-item" data-page="employees"><span class="icon">👤</span> قائمة الموظفين</div>
     <div class="nav-dropdown-item" data-page="employee-performance"><span class="icon">📈</span> تقرير الأداء</div>
     <div class="nav-dropdown-item" data-page="partners"><span class="icon">🤝</span> الشركاء</div>
@@ -781,7 +782,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
         <div class="stat-card red" style="cursor:pointer" onclick="showPage('expenses')"><div class="stat-icon">💸</div><div class="stat-value" id="ds-expenses">0</div><div class="stat-label">مصروفات اليوم</div></div>
         <div class="stat-card purple" style="cursor:pointer" onclick="showPage('reports')"><div class="stat-icon">✨</div><div class="stat-value" id="ds-netprofit">0</div><div class="stat-label">صافي الربح</div></div>
         <div class="stat-card yellow" style="cursor:pointer" onclick="showPage('products')"><div class="stat-icon">📦</div><div class="stat-value" id="ds-products">0</div><div class="stat-label">المنتجات</div></div>
-        <div class="stat-card orange" style="cursor:pointer" onclick="showPage('products')"><div class="stat-icon">âš ï¸</div><div class="stat-value" id="ds-lowstock">0</div><div class="stat-label">مخزون منخفض</div></div>
+        <div class="stat-card orange" style="cursor:pointer" onclick="showPage('products')"><div class="stat-icon">⚠️</div><div class="stat-value" id="ds-lowstock">0</div><div class="stat-label">مخزون منخفض</div></div>
         <div class="stat-card blue" style="cursor:pointer" onclick="showPage('treasury')"><div class="stat-icon">🏦</div><div class="stat-value" id="ds-treasury">0</div><div class="stat-label">رصيد الخزنة</div></div>
         <div class="stat-card red" style="cursor:pointer" onclick="showPage('maintenance')"><div class="stat-icon">🔧</div><div class="stat-value" id="ds-maint">0</div><div class="stat-label">صيانة قيد التنفيذ</div></div>
       </div>
@@ -991,6 +992,32 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
             <button class="btn btn-danger btn-sm" style="width:100%;justify-content:center" onclick="clearCart()">🗑️ مسح الفاتورة</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- NEW INVOICE (Sales page with purchases-style layout) -->
+    <div class="page" id="page-newinvoice">
+      <div class="page-header">
+        <div class="page-title">🧾 New Invoic</div>
+        <div class="table-actions">
+          <input class="search-input" type="text" placeholder="بحث بالعميل/رقم الفاتورة..." oninput="renderInvoices(this.value)">
+          <button class="btn btn-accent btn-sm" onclick="openNewInvoiceModal()">➕ فاتورة بيع جديدة</button>
+        </div>
+      </div>
+      <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+        <div class="stat-card blue" style="padding:14px"><div class="stat-value" style="font-size:1.1rem" id="newinv-total">0</div><div class="stat-label">إجمالي المبيعات</div></div>
+        <div class="stat-card green" style="padding:14px"><div class="stat-value" style="font-size:1.1rem;color:var(--green)" id="newinv-profit">0</div><div class="stat-label">إجمالي الأرباح</div></div>
+        <div class="stat-card yellow" style="padding:14px"><div class="stat-value" style="font-size:1.1rem;color:var(--yellow)" id="newinv-count">0</div><div class="stat-label">عدد الفواتير</div></div>
+      </div>
+      <div class="table-container">
+        <div class="table-header">
+          <div class="table-title">📋 فواتير البيع</div>
+          <button class="btn btn-outline btn-sm" onclick="openNewInvoiceModal()">🧾 إنشاء فاتورة</button>
+        </div>
+        <div class="overflow-x"><table class="data-table">
+          <thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>المنتجات</th><th>الإجمالي</th><th>نوع الفاتورة</th><th>طريقة الدفع</th><th>البائع</th><th>إجراءات</th></tr></thead>
+          <tbody id="newInvoiceTbody"></tbody>
+        </table></div>
       </div>
     </div>
 
@@ -1378,7 +1405,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
             <button class="btn btn-outline btn-sm" onclick="filterBroadcast('all')">الكل</button>
             <button class="btn btn-outline btn-sm" onclick="filterBroadcast('customers')">👥 عملاء</button>
             <button class="btn btn-outline btn-sm" onclick="filterBroadcast('suppliers')">🏭 موردين</button>
-            <button class="btn btn-outline btn-sm" onclick="filterBroadcast('employees')">👨??? موظفين</button>
+    <button class="btn btn-outline btn-sm" onclick="filterBroadcast('employees')">👨‍💼 موظفين</button>
             <button class="btn btn-outline btn-sm" onclick="filterBroadcast('debtors')">💰 مدينون فقط</button>
             <button class="btn btn-accent btn-sm" onclick="selectAllBroadcast(true)">✅ تحديد الكل</button>
             <button class="btn btn-outline btn-sm" onclick="selectAllBroadcast(false)">☐ إلغاء الكل</button>
@@ -1408,7 +1435,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
     <!-- EMPLOYEES -->
     <div class="page" id="page-employees">
       <div class="page-header">
-        <div class="page-title">👨??? الموظفين</div>
+        <div class="page-title">👨‍💼 الموظفين</div>
         <button class="btn btn-accent btn-sm" onclick="openEmployeeModal()">➕ إضافة موظف</button>
       </div>
       <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
@@ -1659,7 +1686,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
           <div class="stat-label">جهات الاتصال للموبايل</div>
         </div>
         <div class="stat-card red" style="padding:18px;cursor:pointer" onclick="if(confirm('مسح كل البيانات؟'))resetAllData()">
-          <div class="stat-icon">âš ï¸</div><div class="stat-value" style="font-size:1rem;color:var(--red)">إعادة ضبط</div>
+          <div class="stat-icon">⚠️</div><div class="stat-value" style="font-size:1rem;color:var(--red)">إعادة ضبط</div>
           <div class="stat-label">حذف كل البيانات (خطر!)</div>
         </div>
         <div class="stat-card blue" id="backupGhRestoreCard" style="padding:18px;cursor:pointer;border:2px solid var(--accent)" onclick="backupGhRestore()">
@@ -2414,7 +2441,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
   <div class="form-group"><label>الفئة</label>
     <select id="expCategory">
       <option value="rent">🏠 إيجار</option>
-      <option value="salary">👨??? رواتب</option>
+      <option value="salary">👨‍💼 رواتب</option>
       <option value="utilities">💡 فواتير</option>
       <option value="transport">🚗 مواصلات</option>
       <option value="marketing">📢 تسويق</option>
@@ -2889,7 +2916,7 @@ async function ghPull(silent=false) {
       if (!silent) { showPill('✅ تم الاستعادة من GitHub',3000); showToast('✅ تم الاستعادة من GitHub'); }
       return true;
     }
-  } catch(e) { if(!silent) showPill('�Œ '+e.message,4000); console.error('ghPull',e); }
+  } catch(e) { if(!silent) showPill('⚠️ '+e.message,4000); console.error('ghPull',e); }
   return false;
 }
 
@@ -2997,7 +3024,7 @@ async function frConnect() {
       if (ok) initApp();
     }, 2000);
   } catch(e) {
-    frSetStatus('�Œ '+e.message, 'var(--red)', 'rgba(229,57,53,.08)');
+    frSetStatus('⚠️ '+e.message, 'var(--red)', 'rgba(229,57,53,.08)');
     btn.disabled = false; btn.textContent = '🔗 ربط وحفظ الإعدادات';
   }
 }
@@ -3126,7 +3153,7 @@ function showPage(page) {
   if (page === 'dashboard') renderDashboard();
   if (page === 'daily') renderDailyReport();
   if (page === 'pos') { renderPOSProducts(); setPOSMode('sale'); ensureSaleIssueButtonBinding(); }
-  if (page === 'invoices') renderInvoices();
+  if (page === 'invoices' || page === 'newinvoice') renderInvoices();
   if (page === 'products') renderProductsTable();
   if (page === 'stockmovement') renderStockMovement();
   if (page === 'purchases') renderPurchases();
@@ -7473,12 +7500,21 @@ function renderInvoices(filter = '') {
   const total = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const profit = invoices.reduce((sum, inv) => sum + (inv.profit || 0), 0);
   
-  document.getElementById('inv-total').textContent = formatMoney(total);
-  document.getElementById('inv-profit').textContent = formatMoney(profit);
-  document.getElementById('inv-count').textContent = invoices.length;
-  
-  const tbody = document.getElementById('invoicesTbody');
-  tbody.innerHTML = invoices.slice(0, 100).map(inv => {
+  const invTotalEl = document.getElementById('inv-total');
+  const invProfitEl = document.getElementById('inv-profit');
+  const invCountEl = document.getElementById('inv-count');
+  const newInvTotalEl = document.getElementById('newinv-total');
+  const newInvProfitEl = document.getElementById('newinv-profit');
+  const newInvCountEl = document.getElementById('newinv-count');
+
+  if (invTotalEl) invTotalEl.textContent = formatMoney(total);
+  if (invProfitEl) invProfitEl.textContent = formatMoney(profit);
+  if (invCountEl) invCountEl.textContent = invoices.length;
+  if (newInvTotalEl) newInvTotalEl.textContent = formatMoney(total);
+  if (newInvProfitEl) newInvProfitEl.textContent = formatMoney(profit);
+  if (newInvCountEl) newInvCountEl.textContent = invoices.length;
+
+  const rowsHTML = invoices.slice(0, 100).map(inv => {
     const items = inv.items ? inv.items.length : 0;
     return `<tr>
       <td>${inv.id}</td>
@@ -7499,6 +7535,11 @@ function renderInvoices(filter = '') {
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="9" style="text-align:center">لا توجد فواتير</td></tr>';
+
+  const tbody = document.getElementById('invoicesTbody');
+  if (tbody) tbody.innerHTML = rowsHTML;
+  const newTbody = document.getElementById('newInvoiceTbody');
+  if (newTbody) newTbody.innerHTML = rowsHTML;
 }
 
 function viewInvoice(id) {
@@ -9562,7 +9603,7 @@ function getAllContacts() {
     if (s.phone) contacts.push({ id: s.id, name: s.name, phone: s.phone, phone2: s.phone2 || '', type: 'supplier', typeLabel: '🏭 مورد', selected: false });
   });
   DB.employees.forEach(e => {
-    if (e.phone) contacts.push({ id: e.id, name: e.name, phone: e.phone, phone2: e.phone2 || '', type: 'employee', typeLabel: '👨??? موظف', selected: false });
+    if (e.phone) contacts.push({ id: e.id, name: e.name, phone: e.phone, phone2: e.phone2 || '', type: 'employee', typeLabel: '👨‍💼 موظف', selected: false });
   });
   return contacts;
 }
@@ -9950,7 +9991,7 @@ function renderSyncPage() {
   const tInput = document.getElementById('syncTokenInput');
   const gInput = document.getElementById('syncGistInput');
 
-  if(icon)  icon.textContent  = connected ? '✅' : hasToken ? 'âš ï¸' : '☁️';
+  if(icon)  icon.textContent  = connected ? '✅' : hasToken ? '⚠️' : '☁️';
   if(title) title.textContent = connected ? 'متصل بـ GitHub — مزامنة كل 3 ثواني 🟢' : hasToken ? 'Token مُدخل — جاري تجهيز المزامنة' : 'غير مفعّل';
   if(sub)   sub.textContent   = connected
     ? (ghLastSaved ? 'آخر حفظ: '+ghLastSaved.toLocaleTimeString('ar-EG') : 'بانتظار أول تغيير...')
@@ -9986,7 +10027,7 @@ async function syncPageConnect() {
     renderSyncPage();
     updateGhStatusCard();
   } catch(e) {
-    msg.textContent='�Œ '+e.message; msg.style.color='var(--red)';
+    msg.textContent='⚠️ '+e.message; msg.style.color='var(--red)';
     console.error('syncPageConnect', e);
   }
 }
@@ -10106,6 +10147,7 @@ setTimeout(() => { autoPrepareGithubSync(); }, 400);
 </script>
 </body>
 </html>
+
 
 
 
