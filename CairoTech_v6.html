@@ -4825,6 +4825,13 @@ function handleCompleteAction() {
   openSaleIssueModal();
 }
 
+function ensureSaleIssueButtonBinding() {
+  const btn = document.getElementById('posCompleteBtn');
+  if (!btn) return;
+  btn.setAttribute('onclick', 'handleCompleteAction()');
+  btn.onclick = handleCompleteAction;
+}
+
 function openSaleIssueModal() {
   if (!currentCart || currentCart.length === 0) { showToast('السلة فارغة', 'error'); return; }
   document.getElementById('saleIssueName').value = document.getElementById('cartCustomer').value || '';
@@ -9036,6 +9043,7 @@ function initApp() {
 
   // Strict cross-module balance audit on real user data
   runStrictBalanceAudit();
+  ensureSaleIssueButtonBinding();
 }
 
 // ================= الوضع الليلي =================
