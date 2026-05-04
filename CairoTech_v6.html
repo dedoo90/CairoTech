@@ -1913,6 +1913,9 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   <!-- Party Select (customer/supplier) -->
   <div id="vchPartySelectRow" class="form-group">
     <label id="vchPartyLabel">العميل</label>
+    <input type="text" id="vchPartySearch" placeholder="🔍 ابحث بالاسم أو رقم الهاتف..."
+      oninput="filterVoucherParties(this.value)"
+      style="width:100%;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:Cairo,sans-serif;outline:none">
     <select id="vchPartySelect" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:Cairo,sans-serif;outline:none" onchange="onVoucherPartySelect()">
       <option value="">اختر...</option>
     </select>
@@ -2147,9 +2150,10 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="modal-title">✏️ تعديل فاتورة بيع<button class="modal-close" onclick="closeModal('editSaleInvoiceModal')">&times;</button></div>
   <input type="hidden" id="editSaleInvId">
 
+  <!-- Customer Info -->
   <div class="grid-2">
     <div class="form-group"><label>اسم العميل</label><input type="text" id="editSaleInvCustomer" placeholder="اسم العميل"></div>
-    <div class="form-group"><label>التليفون</label><input type="tel" id="editSaleInvPhone" placeholder="01xxxxxxxxx" style="direction:ltr"></div>
+    <div class="form-group"><label>تليفون العميل</label><input type="tel" id="editSaleInvPhone" placeholder="01xxxxxxxxx" style="direction:ltr"></div>
   </div>
   <div class="grid-2">
     <div class="form-group"><label>نوع الفاتورة</label>
@@ -2170,11 +2174,11 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   </div>
 
   <hr class="divider">
-  <div style="font-size:0.88rem;font-weight:700;margin-bottom:10px;color:var(--accent)">📋 الأصناف — يمكن تعديل الكمية والسعر أو حذف صنف</div>
+  <div style="font-weight:700;font-size:0.88rem;margin-bottom:10px;color:var(--accent)">➕ أصناف الفاتورة</div>
   <div id="editSaleInvItems"></div>
 
   <div class="grid-2" style="margin-top:10px">
-    <div class="form-group"><label>الخصم (EGP)</label>
+    <div class="form-group"><label>الخصم</label>
       <input type="number" id="editSaleInvDiscount" value="0" min="0" oninput="renderEditSaleItems()">
     </div>
     <div class="form-group"><label>ملاحظات</label>
@@ -2182,19 +2186,17 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     </div>
   </div>
 
-  <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-top:8px">
-    <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px">
-      <span>الإجمالي قبل الخصم</span>
-      <span id="editSaleInvSubtotal" style="font-weight:700">0 EGP</span>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:1rem;font-weight:700;color:var(--accent)">
-      <span>الإجمالي النهائي</span>
-      <span id="editSaleInvTotal">0 EGP</span>
-    </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:8px;padding:10px 14px;font-size:1rem;font-weight:700;margin-top:8px">
+    <span>الإجمالي قبل الخصم:</span>
+    <span id="editSaleInvSubtotal" style="color:var(--text)">0 EGP</span>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;background:#f5f5f5;border-radius:8px;padding:10px 14px;font-size:1.05rem;font-weight:700;margin-top:8px">
+    <span>إجمالي الفاتورة:</span>
+    <span id="editSaleInvTotal" style="color:#0066ff">0 EGP</span>
   </div>
 
   <div class="alert alert-info" style="margin-top:12px;font-size:0.75rem">
-    ✅ عند الحفظ سيتم مزامنة المخزون والخزنة تلقائياً بناءً على السيريالات والكميات الجديدة
+    ✅ عند الحفظ سيتم مزامنة المخزون والخزنة تلقائياً حسب الكميات والسيريالات الجديدة
   </div>
 
   <div class="modal-footer">
@@ -2401,6 +2403,18 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 <div class="modal-overlay" id="paySalaryModal"><div class="modal">
   <div class="modal-title">💰 صرف راتب<button class="modal-close" onclick="closeModal('paySalaryModal')">&times;</button></div>
   <div id="paySalaryContent"></div>
+</div></div>
+
+<!-- Edit Employee Salary Modal -->
+<div class="modal-overlay" id="editEmpSalaryModal"><div class="modal">
+  <div class="modal-title">✏️ تعديل راتب الموظف<button class="modal-close" onclick="closeModal('editEmpSalaryModal')">&times;</button></div>
+  <input type="hidden" id="editEmpSalaryId">
+  <div class="form-group"><label>اسم الموظف</label><input type="text" id="editEmpSalaryName" readonly></div>
+  <div class="form-group"><label>الراتب الأساسي الجديد</label><input type="number" id="editEmpSalaryValue" min="0" step="0.01" placeholder="0"></div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('editEmpSalaryModal')">إلغاء</button>
+    <button class="btn btn-accent" onclick="saveEmployeeSalaryEdit()">💾 حفظ التعديل</button>
+  </div>
 </div></div>
 
 <!-- Partner Modal -->
@@ -3216,6 +3230,56 @@ function getProductStock(productId) {
   return getAvailableSerials(productId).length;
 }
 
+function ensureNoSerialCostLayers(product) {
+  if (!product || product.hasSerial !== false) return;
+  if (!Array.isArray(product.costLayers)) product.costLayers = [];
+  if (product.costLayers.length === 0 && (product.stockQty || 0) > 0) {
+    product.costLayers.push({
+      qty: product.stockQty || 0,
+      cost: Number(product.buyPrice || 0),
+      source: 'opening',
+      date: new Date().toISOString()
+    });
+  }
+}
+
+function addNoSerialCostLayer(productId, qty, cost, sourceId) {
+  const product = DB.products.find(p => p.id === productId);
+  if (!product || product.hasSerial !== false || !qty) return;
+  ensureNoSerialCostLayers(product);
+  product.costLayers.push({
+    qty: Number(qty) || 0,
+    cost: Number(cost) || 0,
+    source: sourceId || 'manual',
+    date: new Date().toISOString()
+  });
+}
+
+function consumeNoSerialCost(productId, qty) {
+  const product = DB.products.find(p => p.id === productId);
+  if (!product || product.hasSerial !== false || !qty) return { totalCost: 0, unitCost: 0 };
+  ensureNoSerialCostLayers(product);
+  let remaining = Number(qty) || 0;
+  let totalCost = 0;
+  const layers = product.costLayers;
+
+  for (let i = 0; i < layers.length && remaining > 0; i++) {
+    const layer = layers[i];
+    const layerQty = Number(layer.qty || 0);
+    if (layerQty <= 0) continue;
+    const take = Math.min(layerQty, remaining);
+    totalCost += take * Number(layer.cost || 0);
+    layer.qty = layerQty - take;
+    remaining -= take;
+  }
+
+  product.costLayers = layers.filter(l => Number(l.qty || 0) > 0);
+  if (remaining > 0) {
+    totalCost += remaining * Number(product.buyPrice || 0);
+  }
+  return { totalCost, unitCost: (Number(qty) > 0 ? totalCost / Number(qty) : 0) };
+}
+
 function addCashEntry(type, amount, method, desc) {
   const balance = DB.cashFlow.reduce((sum, c) => sum + (c.type === 'in' ? (c.amount || 0) : -(c.amount || 0)), 0);
   const newBalance = type === 'in' ? balance + amount : balance - amount;
@@ -3654,6 +3718,15 @@ function saveProduct() {
 
   if (!name) { showToast('أدخل اسم المنتج', 'error'); return; }
 
+  const normalizedName = name.replace(/\s+/g, ' ').trim().toLowerCase();
+  const duplicate = (DB.products || []).find(p =>
+    ((p.name || '').replace(/\s+/g, ' ').trim().toLowerCase() === normalizedName)
+  );
+  if (duplicate) {
+    showToast(`⚠️ هذا الصنف مسجل بالفعل في المخزن: ${duplicate.name}`, 'error');
+    return;
+  }
+
   const productId = Date.now();
 
   if (hasSerial) {
@@ -4045,6 +4118,7 @@ function savePurchase() {
           ? ((oldQty * oldCost) + (newQty * item.price)) / (oldQty + newQty)
           : item.price;
         prod.stockQty = oldQty + newQty;
+        addNoSerialCostLayer(item.productId, newQty, item.price, invoiceId);
         if (!prod.sellPrice || prod.sellPrice === 0) prod.sellPrice = item.sellPrice || item.price;
       }
     } else {
@@ -5975,6 +6049,7 @@ function renderEmployees() {
     <td>${e.lastPaid ? new Date(e.lastPaid).toLocaleDateString('ar-EG') : 'لم يُصرف'}</td>
     <td>
       <button class="btn btn-sm btn-green" onclick="paySalary(${e.id})">💰 صرف</button>
+      <button class="btn btn-sm btn-accent" onclick="openEditEmployeeSalaryModal(${e.id})">✏️ تعديل الراتب</button>
       <button class="btn btn-sm btn-danger" onclick="deleteEmployee(${idx})">🗑️</button>
     </td>
   </tr>`).join('') || '<tr><td colspan="8" style="text-align:center">لا يوجد موظفين</td></tr>';
@@ -6049,6 +6124,33 @@ function deleteEmployee(idx) {
   saveDB();
   renderEmployees();
   showToast('تم الحذف');
+}
+
+function openEditEmployeeSalaryModal(id) {
+  const emp = DB.employees.find(e => e.id === id);
+  if (!emp) return;
+  document.getElementById('editEmpSalaryId').value = id;
+  document.getElementById('editEmpSalaryName').value = emp.name || '';
+  document.getElementById('editEmpSalaryValue').value = Number(emp.salary || 0);
+  openModal('editEmpSalaryModal');
+}
+
+function saveEmployeeSalaryEdit() {
+  const id = parseInt(document.getElementById('editEmpSalaryId').value);
+  const newSalary = parseFloat(document.getElementById('editEmpSalaryValue').value);
+  if (!Number.isFinite(newSalary) || newSalary < 0) {
+    showToast('أدخل راتب صحيح', 'error');
+    return;
+  }
+  const emp = DB.employees.find(e => e.id === id);
+  if (!emp) return;
+  const oldSalary = Number(emp.salary || 0);
+  emp.salary = newSalary;
+  saveDB();
+  closeModal('editEmpSalaryModal');
+  renderEmployees();
+  logActivity('تعديل راتب موظف', `${emp.name}: ${formatMoney(oldSalary)} → ${formatMoney(newSalary)}`);
+  showToast('تم تعديل الراتب بنجاح');
 }
 
 // ================= PARTNERS =================
@@ -6971,7 +7073,6 @@ function completeSale() {
 
   const subtotal = currentCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const total = subtotal - discount;
-  const profit = currentCart.reduce((sum, item) => sum + ((item.price - item.buyPrice) * item.qty), 0) - discount;
   const partialPaidInput = parseFloat(document.getElementById('salePartialPaid')?.value) || 0;
   const partialPaid = invoiceType === 'ajel' && paymentType !== 'installment' ? Math.max(0, partialPaidInput) : 0;
   if (partialPaid > total) { showToast('المبلغ المدفوع أكبر من إجمالي الفاتورة', 'error'); return; }
@@ -6979,6 +7080,30 @@ function completeSale() {
 
   const invoiceId = 'INV-' + String(DB.settings.nextInvoiceNum).padStart(6, '0');
   DB.settings.nextInvoiceNum++;
+
+  // Resolve actual sale cost per line:
+  // - Serial items: from each serial.purchasePrice
+  // - No-serial items: FIFO layers (costLayers)
+  const actualCostByProduct = {};
+  currentCart.forEach(item => {
+    if (item.noSerial) {
+      const c = consumeNoSerialCost(item.productId, item.qty);
+      actualCostByProduct[item.productId] = c.unitCost || 0;
+    } else {
+      let serialCost = 0;
+      (item.serials || []).forEach(sn => {
+        const sr = DB.serials.find(x => x.serial === sn && x.productId === item.productId);
+        serialCost += Number(sr && sr.purchasePrice != null ? sr.purchasePrice : item.buyPrice || 0);
+      });
+      const unit = item.qty > 0 ? serialCost / item.qty : (item.buyPrice || 0);
+      actualCostByProduct[item.productId] = unit;
+    }
+  });
+
+  const profit = currentCart.reduce((sum, item) => {
+    const cost = Number(actualCostByProduct[item.productId] != null ? actualCostByProduct[item.productId] : item.buyPrice || 0);
+    return sum + ((item.price - cost) * item.qty);
+  }, 0) - discount;
 
   // Update serials status & no-serial stock
   currentCart.forEach(item => {
@@ -7003,7 +7128,7 @@ function completeSale() {
       name: item.name,
       qty: item.qty,
       price: item.price,
-      buyPrice: item.buyPrice,
+      buyPrice: Number(actualCostByProduct[item.productId] != null ? actualCostByProduct[item.productId] : item.buyPrice || 0),
       serials: item.serials
     })),
     subtotal,
@@ -7074,10 +7199,13 @@ function completePurchaseFromPOS() {
   currentCart.forEach(item => {
     if (item.noSerial) {
       const prod = DB.products.find(p => p.id === item.productId);
-      if (prod) prod.stockQty = (prod.stockQty || 0) + item.qty;
+      if (prod) {
+        prod.stockQty = (prod.stockQty || 0) + item.qty;
+        addNoSerialCostLayer(item.productId, item.qty, item.price, invoiceId);
+      }
     } else {
       item.serials.forEach(serial => {
-        DB.serials.push({ serial, productId: item.productId, status: 'available', purchaseInvoiceId: invoiceId, saleInvoiceId: null });
+        DB.serials.push({ serial, productId: item.productId, status: 'available', purchaseInvoiceId: invoiceId, saleInvoiceId: null, purchasePrice: item.price });
       });
     }
     addStockMovement(item.productId, 'in', item.qty, `شراء POS - فاتورة ${invoiceId}`);
@@ -7390,7 +7518,10 @@ function deleteSaleInvoice(id) {
       });
     } else if (item.productId) {
       const prod = DB.products.find(p => p.id === item.productId);
-      if (prod) prod.stockQty = (prod.stockQty || 0) + item.qty;
+      if (prod) {
+        prod.stockQty = (prod.stockQty || 0) + item.qty;
+        addNoSerialCostLayer(item.productId, item.qty, item.buyPrice || prod.buyPrice || 0, `revert-sale-${id}`);
+      }
     }
     if (item.productId) addStockMovement(item.productId, 'in', item.qty, `إلغاء فاتورة بيع #${id}`);
   });
@@ -7488,7 +7619,7 @@ function filterCartCustomers(query) {
 
   if (q) {
     custList = custList.filter(c => c.name.toLowerCase().includes(q) || (c.phone && c.phone.includes(q)) || (c.phone2 && c.phone2.includes(q)));
-    suppList = suppList.filter(s => s.name.toLowerCase().includes(q) || (s.phone && s.phone.includes(q)));
+    suppList = suppList.filter(s => s.name.toLowerCase().includes(q) || (s.phone && s.phone.includes(q)) || (s.phone2 && s.phone2.includes(q)));
   }
 
   const custOptions = custList.map(c => `<option value="c_${c.id}">${c.name}${c.phone ? ' — ' + c.phone : ''}</option>`).join('');
@@ -7510,7 +7641,7 @@ function saveEditSaleInvoice() {
   const discount = parseFloat(document.getElementById('editSaleInvDiscount').value) || 0;
   const subtotal = editSaleInvItems.reduce((s, i) => s + (i.price * i.qty), 0);
   const newTotal = subtotal - discount;
-  const newProfit = editSaleInvItems.reduce((s, i) => s + ((i.price - (i.buyPrice || 0)) * i.qty), 0) - discount;
+  let newProfit = editSaleInvItems.reduce((s, i) => s + ((i.price - (i.buyPrice || 0)) * i.qty), 0) - discount;
   const oldTotal = inv.total;
 
   // ===== REVERSE OLD INVENTORY EFFECTS =====
@@ -7523,22 +7654,36 @@ function saveEditSaleInvoice() {
       });
     } else if (item.productId) {
       const prod = DB.products.find(p => p.id === item.productId);
-      if (prod) prod.stockQty = (prod.stockQty || 0) + item.qty;
+      if (prod) {
+        prod.stockQty = (prod.stockQty || 0) + item.qty;
+        addNoSerialCostLayer(item.productId, item.qty, item.buyPrice || prod.buyPrice || 0, `edit-revert-${id}`);
+      }
     }
   });
 
   // ===== APPLY NEW INVENTORY EFFECTS =====
   editSaleInvItems.forEach(item => {
     if (item.serials && item.serials.length > 0) {
+      let serialCostTotal = 0;
       item.serials.forEach(serial => {
         const s = DB.serials.find(x => x.serial === serial);
-        if (s) { s.status = 'sold'; s.saleInvoiceId = id; }
+        if (s) {
+          s.status = 'sold';
+          s.saleInvoiceId = id;
+          serialCostTotal += Number(s.purchasePrice != null ? s.purchasePrice : item.buyPrice || 0);
+        }
       });
+      item.buyPrice = item.qty > 0 ? (serialCostTotal / item.qty) : (item.buyPrice || 0);
     } else if (item.productId) {
       const prod = DB.products.find(p => p.id === item.productId);
-      if (prod) prod.stockQty = Math.max(0, (prod.stockQty || 0) - item.qty);
+      if (prod) {
+        const consumed = consumeNoSerialCost(item.productId, item.qty);
+        item.buyPrice = consumed.unitCost || item.buyPrice || prod.buyPrice || 0;
+        prod.stockQty = Math.max(0, (prod.stockQty || 0) - item.qty);
+      }
     }
   });
+  newProfit = editSaleInvItems.reduce((s, i) => s + ((i.price - (i.buyPrice || 0)) * i.qty), 0) - discount;
 
   // ===== مزامنة الخزنة (كاش + دفع جزئي للآجل) =====
   const oldPayment = inv.payment;
@@ -8322,6 +8467,8 @@ function openVoucherModal(type) {
   document.getElementById('vchMethod').value = 'cash';
   document.getElementById('vchBalanceInfo').style.display = 'none';
   document.getElementById('vchPartySelect').value = '';
+  const partySearch = document.getElementById('vchPartySearch');
+  if (partySearch) partySearch.value = '';
 
   // نوع الطرف الافتراضي: قبض = عميل، صرف = مورد
   setVoucherParty(isReceipt ? 'customer' : 'supplier');
@@ -8344,11 +8491,33 @@ function setVoucherParty(partyType) {
   if (!isOther) {
     const label = partyType === 'customer' ? 'العميل' : 'المورد';
     document.getElementById('vchPartyLabel').textContent = label;
-    const list = partyType === 'customer' ? DB.customers : DB.suppliers;
-    document.getElementById('vchPartySelect').innerHTML =
-      `<option value="">اختر ${label}...</option>` +
-      list.map(x => `<option value="${x.id}">${x.name} ${x.phone ? '— ' + x.phone : ''}</option>`).join('');
+    filterVoucherParties((document.getElementById('vchPartySearch')?.value || ''));
     document.getElementById('vchPhone').value = '';
+  }
+}
+
+function filterVoucherParties(query = '') {
+  const partyType = document.getElementById('vchPartyType').value;
+  if (partyType === 'other') return;
+  const select = document.getElementById('vchPartySelect');
+  if (!select) return;
+
+  const label = partyType === 'customer' ? 'العميل' : 'المورد';
+  const q = (query || '').trim().toLowerCase();
+  let list = partyType === 'customer' ? (DB.customers || []) : (DB.suppliers || []);
+  if (q) {
+    list = list.filter(x =>
+      (x.name && x.name.toLowerCase().includes(q)) ||
+      (x.phone && x.phone.includes(q)) ||
+      (x.phone2 && x.phone2.includes(q))
+    );
+  }
+
+  const current = select.value;
+  select.innerHTML = `<option value="">اختر ${label}...</option>` +
+    list.map(x => `<option value="${x.id}">${x.name}${x.phone ? ' — ' + x.phone : ''}</option>`).join('');
+  if (current && list.some(x => String(x.id) === String(current))) {
+    select.value = current;
   }
 }
 
