@@ -985,7 +985,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
             </div>
             <div class="cart-total-row"><span>الخصم</span><span id="cartDiscount">0 EGP</span></div>
             <div class="cart-grand-total"><span>الإجمالي</span><span id="cartTotal">0 EGP</span></div>
-            <button class="btn btn-green" id="posCompleteBtn" style="width:100%;justify-content:center;margin-bottom:7px" onclick="completeSale()">✅ إتمام البيع وطباعة الفاتورة</button>
+            <button class="btn btn-green" id="posCompleteBtn" style="width:100%;justify-content:center;margin-bottom:7px" onclick="handleCompleteAction()">✅ إتمام البيع وطباعة الفاتورة</button>
             <button class="btn btn-danger btn-sm" style="width:100%;justify-content:center" onclick="clearCart()">🗑️ مسح الفاتورة</button>
           </div>
         </div>
@@ -2202,6 +2202,51 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="modal-footer">
     <button class="btn btn-outline" onclick="closeModal('editSaleInvoiceModal');editSaleInvItems=[]">إلغاء</button>
     <button class="btn btn-accent" onclick="saveEditSaleInvoice()">💾 حفظ التعديل</button>
+  </div>
+</div></div>
+
+
+<!-- Sale Issue Modal -->
+<div class="modal-overlay" id="saleIssueModal"><div class="modal modal-xl" style="max-height:92vh;overflow-y:auto">
+  <div class="modal-title">🧾 فاتورة بيع جديدة<button class="modal-close" onclick="closeModal('saleIssueModal')">&times;</button></div>
+  <div class="grid-2">
+    <div class="form-group"><label>بحث العميل / المورد</label>
+      <input type="text" id="saleIssueSearch" placeholder="🔍 ابحث بالاسم أو التليفون..." oninput="filterSaleIssueCustomers(this.value)">
+    </div>
+    <div class="form-group"><label>العميل / المورد</label>
+      <select id="saleIssueSelect" onchange="onSaleIssueCustomerSelect()"><option value="">اختر...</option></select>
+    </div>
+    <div class="form-group"><label>الاسم</label><input type="text" id="saleIssueName" placeholder="اسم العميل / المورد"></div>
+    <div class="form-group"><label>التليفون</label><input type="tel" id="saleIssuePhone" placeholder="01xxxxxxxxx" style="direction:ltr"></div>
+  </div>
+  <div class="grid-2">
+    <div class="form-group"><label>نوع الفاتورة</label>
+      <select id="saleIssueType">
+        <option value="cash">💵 كاش</option>
+        <option value="ajel">📋 آجل</option>
+      </select>
+    </div>
+    <div class="form-group"><label>طريقة الدفع</label>
+      <select id="saleIssuePayment">
+        <option value="cash">💵 كاش</option>
+        <option value="instapay">📲 InstaPay</option>
+        <option value="vodafone">📱 Vodafone Cash</option>
+        <option value="fawry">🏪 Fawry</option>
+        <option value="installment">📆 تقسيط</option>
+      </select>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="form-group"><label>الخصم</label><input type="number" id="saleIssueDiscount" min="0" step="0.01" value="0" oninput="refreshSaleIssueTotals()"></div>
+    <div class="form-group"><label>المدفوع الآن (للآجل)</label><input type="number" id="saleIssuePaid" min="0" step="0.01" value=""></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:8px;padding:10px 14px;font-size:1rem;font-weight:700">
+    <span>إجمالي الفاتورة:</span>
+    <span id="saleIssueTotal" style="color:var(--accent)">0 EGP</span>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('saleIssueModal')">إلغاء</button>
+    <button class="btn btn-green" onclick="confirmSaleIssueModal()">✅ إتمام البيع وطباعة الفاتورة</button>
   </div>
 </div></div>
 
@@ -4769,6 +4814,83 @@ function setPOSMode(mode) {
     completeBtn.style.background = isSale ? 'var(--green)' : 'var(--accent)';
   }
   updateCartCustomerSelect();
+}
+
+function handleCompleteAction() {
+  const posMode = document.getElementById('posModeVal')?.value || 'sale';
+  if (posMode === 'purchase') {
+    completePurchaseFromPOS();
+    return;
+  }
+  openSaleIssueModal();
+}
+
+function openSaleIssueModal() {
+  if (!currentCart || currentCart.length === 0) { showToast('السلة فارغة', 'error'); return; }
+  document.getElementById('saleIssueName').value = document.getElementById('cartCustomer').value || '';
+  document.getElementById('saleIssuePhone').value = document.getElementById('cartCustomerPhone').value || '';
+  document.getElementById('saleIssueType').value = document.getElementById('cartInvoiceType').value || 'cash';
+  document.getElementById('saleIssuePayment').value = document.getElementById('cartPaymentType').value || 'cash';
+  document.getElementById('saleIssueDiscount').value = document.getElementById('discountInput').value || '0';
+  document.getElementById('saleIssuePaid').value = document.getElementById('salePartialPaid')?.value || '';
+  document.getElementById('saleIssueSearch').value = '';
+  filterSaleIssueCustomers('');
+  const currentSel = document.getElementById('cartCustomerSelect').value || '';
+  const modalSel = document.getElementById('saleIssueSelect');
+  if (currentSel && modalSel && [...modalSel.options].some(o => o.value === currentSel)) modalSel.value = currentSel;
+  refreshSaleIssueTotals();
+  openModal('saleIssueModal');
+}
+
+function filterSaleIssueCustomers(query) {
+  const select = document.getElementById('saleIssueSelect');
+  const mode = document.getElementById('posModeVal')?.value || 'sale';
+  if (!select) return;
+  const q = (query || '').toLowerCase().trim();
+  let custList = DB.customers || [];
+  let suppList = DB.suppliers || [];
+  if (q) {
+    custList = custList.filter(c => c.name.toLowerCase().includes(q) || (c.phone && c.phone.includes(q)) || (c.phone2 && c.phone2.includes(q)));
+    suppList = suppList.filter(s => s.name.toLowerCase().includes(q) || (s.phone && s.phone.includes(q)) || (s.phone2 && s.phone2.includes(q)));
+  }
+  const custOptions = custList.map(c => `<option value="c_${c.id}">${c.name}${c.phone ? ' — ' + c.phone : ''}</option>`).join('');
+  const suppOptions = suppList.map(s => `<option value="s_${s.id}">🏭 ${s.name}${s.phone ? ' — ' + s.phone : ''}</option>`).join('');
+  select.innerHTML = mode === 'sale'
+    ? `<option value="">👤 اختر عميل (اختياري)...</option>${custOptions}<optgroup label="── أو مورد ──"></optgroup>${suppOptions}`
+    : `<option value="">🏭 اختر مورد / عميل (اختياري)...</option>${suppOptions}<optgroup label="── أو عميل ──"></optgroup>${custOptions}`;
+}
+
+function onSaleIssueCustomerSelect() {
+  const val = document.getElementById('saleIssueSelect').value;
+  if (!val) return;
+  const isSupplier = val.startsWith('s_');
+  const id = parseInt(val.replace(/^[cs]_/, ''));
+  const entity = isSupplier ? DB.suppliers.find(s => s.id == id) : DB.customers.find(c => c.id == id);
+  if (!entity) return;
+  document.getElementById('saleIssueName').value = entity.name || '';
+  document.getElementById('saleIssuePhone').value = entity.phone || '';
+}
+
+function refreshSaleIssueTotals() {
+  const subtotal = currentCart.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || 0)), 0);
+  const discount = parseFloat(document.getElementById('saleIssueDiscount').value) || 0;
+  document.getElementById('saleIssueTotal').textContent = formatMoney(Math.max(0, subtotal - discount));
+}
+
+function confirmSaleIssueModal() {
+  document.getElementById('cartCustomer').value = document.getElementById('saleIssueName').value.trim();
+  document.getElementById('cartCustomerPhone').value = document.getElementById('saleIssuePhone').value.trim();
+  document.getElementById('cartInvoiceType').value = document.getElementById('saleIssueType').value;
+  document.getElementById('cartPaymentType').value = document.getElementById('saleIssuePayment').value;
+  document.getElementById('discountInput').value = document.getElementById('saleIssueDiscount').value || '0';
+  const sel = document.getElementById('saleIssueSelect').value;
+  if (sel) document.getElementById('cartCustomerSelect').value = sel;
+  const pp = document.getElementById('salePartialPaid');
+  if (pp) pp.value = document.getElementById('saleIssuePaid').value || '';
+  onPaymentTypeChange();
+  onSaleInvoiceTypeChange();
+  closeModal('saleIssueModal');
+  completeSale();
 }
 
 function updateCartCustomerSelect() {
