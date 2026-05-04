@@ -898,6 +898,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
       <div class="page-header">
         <div class="page-title">🛒 نقطة البيع</div>
         <div style="display:flex;gap:6px">
+          <button class="btn btn-accent btn-sm" onclick="openNewInvoiceModal()">🧾 New Invoic</button>
           <button class="btn btn-outline btn-sm" onclick="openQuickSaleModal()">⚡ بيع سريع</button>
           <button class="btn btn-outline btn-sm" onclick="openAddCustomProductModal()">➕ منتج غير موجود</button>
         </div>
@@ -986,7 +987,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
             </div>
             <div class="cart-total-row"><span>الخصم</span><span id="cartDiscount">0 EGP</span></div>
             <div class="cart-grand-total"><span>الإجمالي</span><span id="cartTotal">0 EGP</span></div>
-            <button class="btn btn-green" id="posCompleteBtn" style="width:100%;justify-content:center;margin-bottom:7px" onclick="handleCompleteAction()">✅ إصدار بيع جديد V2</button>
+            <button class="btn btn-green" id="posCompleteBtn" style="width:100%;justify-content:center;margin-bottom:7px" onclick="handleCompleteAction()">✅ إتمام البيع وطباعة الفاتورة</button>
             <button class="btn btn-danger btn-sm" style="width:100%;justify-content:center" onclick="clearCart()">🗑️ مسح الفاتورة</button>
           </div>
         </div>
@@ -2209,7 +2210,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
 
 <!-- Sale Issue Modal -->
 <div class="modal-overlay" id="saleIssueModal"><div class="modal modal-xl" style="max-height:92vh;overflow-y:auto">
-  <div class="modal-title">🧾 فاتورة بيع جديدة<button class="modal-close" onclick="closeModal('saleIssueModal')">&times;</button></div>
+  <div class="modal-title">🧾 New Invoic - فاتورة بيع جديدة<button class="modal-close" onclick="closeModal('saleIssueModal')">&times;</button></div>
   <div class="grid-2">
     <div class="form-group"><label>بحث العميل / المورد</label>
       <input type="text" id="saleIssueSearch" placeholder="🔍 ابحث بالاسم أو التليفون..." oninput="filterSaleIssueCustomers(this.value)">
@@ -4824,6 +4825,10 @@ function handleCompleteAction() {
     completePurchaseFromPOS();
     return;
   }
+  openSaleIssueModal();
+}
+
+function openNewInvoiceModal() {
   openSaleIssueModal();
 }
 
