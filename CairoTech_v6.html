@@ -989,6 +989,10 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
             <div class="cart-total-row"><span>الخصم</span><span id="cartDiscount">0 EGP</span></div>
             <div class="cart-grand-total"><span>الإجمالي</span><span id="cartTotal">0 EGP</span></div>
             <button class="btn btn-green" id="posCompleteBtn" style="width:100%;justify-content:center;margin-bottom:7px" onclick="handleCompleteAction()">✅ إتمام البيع وطباعة الفاتورة</button>
+            <label style="display:flex;align-items:center;gap:6px;background:rgba(249,168,37,0.12);border:1px solid rgba(249,168,37,0.35);border-radius:8px;padding:8px 10px;margin-bottom:7px;font-size:0.78rem;font-weight:700;color:#b26a00;cursor:pointer">
+              <input type="checkbox" id="posAmanatMode" onchange="renderPOSProducts()" style="width:16px;height:16px"> تفعيل بيع أمانات (يسمح بالبيع بدون مخزون)
+            </label>
+            <button class="btn btn-yellow btn-sm" style="width:100%;justify-content:center;margin-bottom:7px" onclick="clearInvoiceDraft('pos')">🧹 مسح مسودة البيع</button>
             <button class="btn btn-danger btn-sm" style="width:100%;justify-content:center" onclick="clearCart()">🗑️ مسح الفاتورة</button>
           </div>
         </div>
@@ -1912,6 +1916,11 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
   <div id="purItemsList" style="margin-bottom:12px"></div>
 
   <!-- Total -->
+  <div class="form-group" style="margin-top:-4px">
+    <label style="display:flex;align-items:center;gap:6px;background:rgba(249,168,37,0.12);border:1px solid rgba(249,168,37,0.35);border-radius:8px;padding:8px 10px;font-size:0.78rem;font-weight:700;color:#b26a00;cursor:pointer">
+      <input type="checkbox" id="nsAmanatMode" style="width:16px;height:16px"> بيع كأمانات (السماح بالبيع بدون مخزون)
+    </label>
+  </div>
   <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:8px;padding:10px 14px;font-size:1rem;font-weight:700">
     <span>إجمالي الفاتورة:</span>
     <span id="purTotalDisplay" style="color:var(--accent)">0.00 EGP</span>
@@ -1919,6 +1928,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
 
   <div class="modal-footer">
     <button class="btn btn-outline" onclick="closeModal('purchaseModal')">إلغاء</button>
+    <button class="btn btn-danger" onclick="clearInvoiceDraft('purchase')">🧹 مسح المسودة</button>
     <button class="btn btn-accent" onclick="savePurchase()">💾 حفظ الفاتورة</button>
   </div>
 </div></div>
@@ -2002,6 +2012,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
 
   <div class="modal-footer">
     <button class="btn btn-outline" onclick="closeModal('newSaleModal')">إلغاء</button>
+    <button class="btn btn-danger" onclick="clearInvoiceDraft('newsale')">🧹 مسح المسودة</button>
     <button class="btn btn-green" onclick="saveNewSaleInvoice()">✅ إتمام البيع وطباعة الفاتورة</button>
   </div>
 </div></div>
@@ -2352,6 +2363,11 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
     <div class="form-group"><label>الخصم</label><input type="number" id="saleIssueDiscount" min="0" step="0.01" value="0" oninput="refreshSaleIssueTotals()"></div>
     <div class="form-group"><label>المدفوع الآن (للآجل)</label><input type="number" id="saleIssuePaid" min="0" step="0.01" value=""></div>
   </div>
+  <div class="form-group" style="margin-top:-4px">
+    <label style="display:flex;align-items:center;gap:6px;background:rgba(249,168,37,0.12);border:1px solid rgba(249,168,37,0.35);border-radius:8px;padding:8px 10px;font-size:0.78rem;font-weight:700;color:#b26a00;cursor:pointer">
+      <input type="checkbox" id="saleIssueAmanatMode" style="width:16px;height:16px"> بيع كأمانات (السماح بالبيع بدون مخزون)
+    </label>
+  </div>
   <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:8px;padding:10px 14px;font-size:1rem;font-weight:700">
     <span>إجمالي الفاتورة:</span>
     <span id="saleIssueTotal" style="color:var(--accent)">0 EGP</span>
@@ -2682,6 +2698,10 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
 // ================= الإعدادات =================
 const DB_KEY = 'cairo_db_v7';
 const USER_REG_KEY = 'cairo_user_registered';
+const SESSION_USER_KEY = 'cairo_session_user';
+const POS_CART_DRAFT_KEY = 'cairo_pos_cart_draft_v1';
+const PURCHASE_DRAFT_KEY = 'cairo_purchase_draft_v1';
+const NS_DRAFT_KEY = 'cairo_newsale_draft_v1';
 
 // ================= الحالة =================
 let DB = {
@@ -2724,6 +2744,8 @@ let currentUser = null;
 let currentCart = [];
 let currentPage = 'dashboard';
 let pendingSerialPicker = null;
+let purCart = []; // سلة مشتريات متعددة الأصناف
+let nsCart = [];
 
 // ================= USER REGISTRATION =================
 let userRegTimer = null;
@@ -2769,6 +2791,7 @@ function doLogin() {
 
   const launchApp = (usr) => {
     currentUser = usr;
+    localStorage.setItem(SESSION_USER_KEY, usr.username);
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     const elN = document.getElementById('userName');
@@ -2822,8 +2845,33 @@ function doLogin() {
 
 function doLogout() {
   logActivity('تسجيل خروج');
+  localStorage.removeItem(SESSION_USER_KEY);
   currentUser = null;
   location.reload();
+}
+
+function tryAutoLoginFromSession() {
+  const username = localStorage.getItem(SESSION_USER_KEY);
+  if (!username) return;
+  const usr = DB.users.find(u => u.username === username);
+  if (!usr) {
+    localStorage.removeItem(SESSION_USER_KEY);
+    return;
+  }
+  currentUser = usr;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  const elN = document.getElementById('userName');
+  const elR = document.getElementById('userRole');
+  const elA = document.getElementById('userAvatar');
+  const roleLabel = usr.role==='Owner'?'👑 مالك':usr.role==='Manager'?'👑 أدمن':usr.role==='WarehouseSales'?'🛒 بائع/مخزن':usr.role;
+  if (elN) elN.textContent = usr.fullName || usr.username;
+  if (elR) elR.textContent = roleLabel;
+  if (elA) elA.textContent = (usr.fullName || usr.username).charAt(0).toUpperCase();
+  applyPermissions();
+  initApp();
+  startUserRegistrationTimer();
+  updateGhStatusCard();
 }
 
 function can(action) {
@@ -3136,6 +3184,7 @@ setInterval(async () => {
 
   // PULL: استعادة من GitHub كل 3 ثوانٍ لاستقبال تغييرات الأجهزة الأخرى
   if (now - ghLastPullTime >= 3000) {
+    if (hasUnsavedDraftWork()) return;
     ghLastPullTime = now;
     const ok = await ghPull(true);
     if (ok && currentUser) {
@@ -3182,6 +3231,65 @@ function saveDB() {
     console.error('saveDB error', e);
   }
   ghPendingSave = true;
+}
+
+function persistCartDrafts() {
+  try { localStorage.setItem(POS_CART_DRAFT_KEY, JSON.stringify(currentCart || [])); } catch(e) {}
+  try { localStorage.setItem(PURCHASE_DRAFT_KEY, JSON.stringify(purCart || [])); } catch(e) {}
+  try { localStorage.setItem(NS_DRAFT_KEY, JSON.stringify(nsCart || [])); } catch(e) {}
+}
+
+function clearDraftByKey(key) {
+  try { localStorage.removeItem(key); } catch(e) {}
+}
+
+function restoreCartDrafts() {
+  let restored = [];
+  try {
+    const posDraft = JSON.parse(localStorage.getItem(POS_CART_DRAFT_KEY) || '[]');
+    if (Array.isArray(posDraft) && posDraft.length) { currentCart = posDraft; restored.push(`بيع POS (${posDraft.length} صنف)`); }
+  } catch(e) {}
+  try {
+    const purDraft = JSON.parse(localStorage.getItem(PURCHASE_DRAFT_KEY) || '[]');
+    if (Array.isArray(purDraft) && purDraft.length) { purCart = purDraft; restored.push(`شراء (${purDraft.length} صنف)`); }
+  } catch(e) {}
+  try {
+    const nsDraft = JSON.parse(localStorage.getItem(NS_DRAFT_KEY) || '[]');
+    if (Array.isArray(nsDraft) && nsDraft.length) { nsCart = nsDraft; restored.push(`بيع جديد (${nsDraft.length} صنف)`); }
+  } catch(e) {}
+  if (restored.length > 0) {
+    setTimeout(() => showPill('🧾 تم استرجاع مسودة: ' + restored.join(' | '), 7000), 300);
+    setTimeout(() => showToast('تم استرجاع المسودة السابقة تلقائياً', 'info'), 500);
+  }
+}
+
+function hasUnsavedDraftWork() {
+  return (currentCart && currentCart.length > 0) ||
+         (purCart && purCart.length > 0) ||
+         (nsCart && nsCart.length > 0);
+}
+
+function clearInvoiceDraft(type) {
+  if (type === 'pos') {
+    currentCart = [];
+    clearDraftByKey(POS_CART_DRAFT_KEY);
+    try { renderCart(); } catch(e) {}
+    showToast('تم مسح مسودة بيع POS', 'success');
+    return;
+  }
+  if (type === 'purchase') {
+    purCart = [];
+    clearDraftByKey(PURCHASE_DRAFT_KEY);
+    try { renderPurCart(); } catch(e) {}
+    showToast('تم مسح مسودة الشراء', 'success');
+    return;
+  }
+  if (type === 'newsale') {
+    nsCart = [];
+    clearDraftByKey(NS_DRAFT_KEY);
+    try { renderNewSaleCart(); } catch(e) {}
+    showToast('تم مسح مسودة فاتورة البيع', 'success');
+  }
 }
 
 function logActivity(action, details = '') {
@@ -3384,7 +3492,17 @@ function getProductStock(productId) {
   const product = DB.products.find(p => p.id === productId);
   if (!product) return 0;
   if (product.hasSerial === false) return product.stockQty || 0;
-  return getAvailableSerials(productId).length;
+  const serialAvailable = getAvailableSerials(productId).length;
+  if (serialAvailable > 0) return serialAvailable;
+  // Fallback: product is marked serial-based, but no serial rows exist while stockQty has quantity.
+  // Treat stockQty as sellable to avoid blocking legacy/inconsistent data.
+  return Number(product.stockQty || 0);
+}
+
+function isAmanatModeEnabled(context) {
+  if (context === 'newsale') return !!document.getElementById('nsAmanatMode')?.checked;
+  if (context === 'saleIssue') return !!document.getElementById('saleIssueAmanatMode')?.checked;
+  return !!document.getElementById('posAmanatMode')?.checked;
 }
 
 function ensureNoSerialCostLayers(product) {
@@ -4048,10 +4166,9 @@ function renderStockMovement() {
 
 // ================= المشتريات =================
 // ================= المشتريات =================
-let purCart = []; // سلة مشتريات متعددة الأصناف
 
 function openPurchaseModal() {
-  purCart = [];
+  if (!Array.isArray(purCart)) purCart = [];
   const suppSearch = document.getElementById('purSupplierSearch'); if (suppSearch) suppSearch.value = '';
   filterPurchaseSuppliers('');
   const _ps = document.getElementById('purProductSearch'); if(_ps){_ps.value='';}
@@ -4089,6 +4206,7 @@ function filterPurchaseSuppliers(query = '') {
 }
 
 function renderPurCart() {
+  persistCartDrafts();
   const container = document.getElementById('purItemsList');
   const total = purCart.reduce((s, i) => s + i.total, 0);
   document.getElementById('purTotalDisplay').textContent = formatMoney(total);
@@ -4322,6 +4440,7 @@ function savePurchase() {
   renderPurchases();
   showToast(`تم حفظ فاتورة الشراء (${purCart.length} صنف - ${formatMoney(total)})`);
   purCart = [];
+  clearDraftByKey(PURCHASE_DRAFT_KEY);
 }
 
 function renderPurchases(filter = '') {
@@ -4946,11 +5065,10 @@ function startNewInvoiceFromPage() {
   openNewSaleModal();
 }
 
-let nsCart = [];
 let _nsDropIdx = -1;
 
 function openNewSaleModal() {
-  nsCart = [];
+  if (!Array.isArray(nsCart)) nsCart = [];
   document.getElementById('nsCustomerSearch').value = '';
   filterNewSaleCustomers('');
   document.getElementById('nsCustomerPhone').value = '';
@@ -5091,11 +5209,35 @@ function addNewSaleItem() {
   const uniqueSerials = [...new Set(serials)];
   if (uniqueSerials.length !== serials.length) { showToast('❌ يوجد سيريالات مكررة', 'error'); return; }
 
+  const amanatMode = isAmanatModeEnabled('newsale');
   let qty = qtyInput;
   if (product.hasSerial === false) {
     const stock = getProductStock(productId);
-    if (qtyInput > stock) { showToast(`الكمية المتاحة: ${stock}`, 'error'); return; }
+    if (!amanatMode && qtyInput > stock) { showToast(`الكمية المتاحة: ${stock}`, 'error'); return; }
   } else {
+    if (amanatMode && serials.length === 0 && getProductStock(productId) === 0) {
+      // In amanat mode, allow serial products with no stock as no-serial pending sale
+      nsCart.push({
+        productId,
+        name: product.name,
+        price,
+        buyPrice: product.buyPrice || 0,
+        qty: qtyInput,
+        serials: [],
+        noSerial: true,
+        isAmanat: true
+      });
+      document.getElementById('nsProductSearch').value = '';
+      document.getElementById('nsProductSelect').value = '';
+      document.getElementById('nsPrice').value = '';
+      document.getElementById('nsSerials').value = '';
+      document.getElementById('nsQty').value = '1';
+      document.getElementById('nsScanInput').value = '';
+      updateNsSerialsCount();
+      renderNewSaleCart();
+      showToast('🟠 تم إضافة الصنف كأمانة (بدون مخزون حالي)', 'info');
+      return;
+    }
     if (serials.length === 0) { showToast('أدخل السيريالات', 'error'); return; }
     const unavailable = serials.filter(sn => !DB.serials.find(x => x.productId === productId && x.serial === sn && x.status === 'available'));
     if (unavailable.length) { showToast('❌ بعض السيريالات غير متاحة للبيع', 'error'); return; }
@@ -5111,7 +5253,8 @@ function addNewSaleItem() {
     buyPrice: product.buyPrice || 0,
     qty,
     serials: product.hasSerial === false ? [] : serials,
-    noSerial: product.hasSerial === false
+    noSerial: product.hasSerial === false,
+    isAmanat: false
   });
 
   document.getElementById('nsProductSearch').value = '';
@@ -5130,6 +5273,7 @@ function removeNewSaleItem(idx) {
 }
 
 function renderNewSaleCart() {
+  persistCartDrafts();
   const box = document.getElementById('nsItemsList');
   const totalBefore = nsCart.reduce((s, i) => s + ((i.price || 0) * (i.qty || 0)), 0);
   const discount = parseFloat(document.getElementById('nsDiscount').value) || 0;
@@ -5143,7 +5287,7 @@ function renderNewSaleCart() {
   box.innerHTML = `<table class="data-table" style="margin-bottom:4px"><thead><tr><th>المنتج</th><th>السعر</th><th>الكمية</th><th>الإجمالي</th><th>السيريالات</th><th></th></tr></thead><tbody>
   ${nsCart.map((it, idx) => `<tr>
     <td>${it.name}</td><td>${formatMoney(it.price)}</td><td>${it.qty}</td><td>${formatMoney(it.price * it.qty)}</td>
-    <td style="font-size:0.68rem;font-family:monospace">${it.serials.length ? it.serials.join(', ') : '<span style="color:var(--text2)">بدون سيريال</span>'}</td>
+    <td style="font-size:0.68rem;font-family:monospace">${it.serials.length ? it.serials.join(', ') : '<span style="color:var(--text2)">بدون سيريال</span>'}${it.isAmanat ? '<div style="color:#b26a00;font-weight:700">🟠 أمانة</div>' : ''}</td>
     <td><button class="btn btn-danger btn-sm" onclick="removeNewSaleItem(${idx})">🗑️</button></td>
   </tr>`).join('')}</tbody></table>`;
 }
@@ -5185,7 +5329,7 @@ function saveNewSaleInvoice() {
   nsCart.forEach(item => {
     if (item.noSerial) {
       const p = DB.products.find(x => x.id === item.productId);
-      if (p) p.stockQty = Math.max(0, (p.stockQty || 0) - item.qty);
+      if (p) p.stockQty = item.isAmanat ? ((p.stockQty || 0) - item.qty) : Math.max(0, (p.stockQty || 0) - item.qty);
     } else {
       item.serials.forEach(serial => {
         const s = DB.serials.find(x => x.serial === serial && x.productId === item.productId);
@@ -5206,7 +5350,8 @@ function saveNewSaleInvoice() {
       qty: item.qty,
       price: item.price,
       buyPrice: Number(actualCostByProduct[item.productId] || 0),
-      serials: item.serials
+      serials: item.serials,
+      isAmanat: !!item.isAmanat
     })),
     subtotal,
     discount,
@@ -5220,6 +5365,7 @@ function saveNewSaleInvoice() {
   };
 
   DB.saleInvoices.push(invoice);
+  const amanatCount = nsCart.filter(i => i.isAmanat).reduce((s,i)=>s+(i.qty||0),0);
   autoSaveCustomer(customer, customerPhone);
   if (invoiceType === 'cash') addCashEntry('in', total, paymentType, `بيع - ${customer}`);
   if (invoiceType === 'ajel' && partialPaid > 0) addCashEntry('in', partialPaid, paymentType, `دفعة مقدمة بيع آجل - ${customer} - ${invoiceId}`);
@@ -5228,7 +5374,8 @@ function saveNewSaleInvoice() {
   closeModal('newSaleModal');
   renderInvoices();
   printInvoice(invoice);
-  showToast('✅ تم إتمام البيع بنجاح');
+  showToast(amanatCount > 0 ? `✅ تم البيع، مع تسجيل ${amanatCount} وحدة كأمانات` : '✅ تم إتمام البيع بنجاح');
+  clearDraftByKey(NS_DRAFT_KEY);
 }
 
 function ensureSaleIssueButtonBinding() {
@@ -5251,6 +5398,9 @@ function openSaleIssueModal() {
   const currentSel = document.getElementById('cartCustomerSelect').value || '';
   const modalSel = document.getElementById('saleIssueSelect');
   if (currentSel && modalSel && [...modalSel.options].some(o => o.value === currentSel)) modalSel.value = currentSel;
+  const posAmanat = !!document.getElementById('posAmanatMode')?.checked;
+  const amanatEl = document.getElementById('saleIssueAmanatMode');
+  if (amanatEl) amanatEl.checked = posAmanat;
   refreshSaleIssueTotals();
   openModal('saleIssueModal');
 }
@@ -5300,6 +5450,9 @@ function confirmSaleIssueModal() {
   if (sel) document.getElementById('cartCustomerSelect').value = sel;
   const pp = document.getElementById('salePartialPaid');
   if (pp) pp.value = document.getElementById('saleIssuePaid').value || '';
+  const amanat = !!document.getElementById('saleIssueAmanatMode')?.checked;
+  const posAmanat = document.getElementById('posAmanatMode');
+  if (posAmanat) posAmanat.checked = amanat;
   onPaymentTypeChange();
   onSaleInvoiceTypeChange();
   closeModal('saleIssueModal');
@@ -7280,7 +7433,8 @@ function renderPOSProducts(filter = '') {
   
   grid.innerHTML = products.map(p => {
     const stock = getProductStock(p.id);
-    const disabled = stock === 0 ? 'opacity:0.5;pointer-events:none;' : '';
+    const allowAmanat = isAmanatModeEnabled('pos');
+    const disabled = (stock === 0 && !allowAmanat) ? 'opacity:0.5;pointer-events:none;' : '';
     return `<div class="product-card" style="${disabled}" onclick="addToCart(${p.id})">
       <div class="p-name">${p.name}</div>
       <div class="p-price">${formatMoney(p.sellPrice)}</div>
@@ -7296,15 +7450,22 @@ function addToCart(productId) {
   if (!product) return;
 
   const stock = getProductStock(productId);
-  if (stock === 0) { showToast('لا يوجد مخزون متاح', 'error'); return; }
+  const amanatMode = isAmanatModeEnabled('pos') || isAmanatModeEnabled('saleIssue');
+  if (stock === 0 && !amanatMode) { showToast('لا يوجد مخزون متاح', 'error'); return; }
+  const serialAvailableCount = getAvailableSerials(productId).length;
+  const serialFallbackToNoSerial = product.hasSerial !== false && serialAvailableCount === 0 && Number(product.stockQty || 0) > 0;
+  const amanatNoStock = stock === 0 && amanatMode;
 
-  if (product.hasSerial === false) {
+  if (product.hasSerial === false || serialFallbackToNoSerial || amanatNoStock) {
     // No-serial product: add directly with qty input
     const existing = currentCart.find(item => item.productId === productId);
     if (existing) {
       const maxQty = stock;
-      if (existing.qty >= maxQty) { showToast('وصلت للحد الأقصى المتاح', 'error'); return; }
+      if (!amanatNoStock && existing.qty >= maxQty) { showToast('وصلت للحد الأقصى المتاح', 'error'); return; }
       existing.qty++;
+      existing.noSerial = true;
+      existing.serials = [];
+      if (amanatNoStock) existing.isAmanat = true;
     } else {
       currentCart.push({
         productId,
@@ -7313,15 +7474,23 @@ function addToCart(productId) {
         buyPrice: product.buyPrice,
         qty: 1,
         serials: [],
-        noSerial: true
+        noSerial: true,
+        isAmanat: amanatNoStock
       });
     }
     renderCart();
-    showToast('تم الإضافة للسلة');
+    if (amanatNoStock) {
+      showToast('🟠 تم إضافة الصنف كأمانة (بدون مخزون حالي)', 'info');
+    } else if (serialFallbackToNoSerial) {
+      showToast('⚠️ لا توجد سيريالات متاحة لهذا الصنف، تم الإضافة تلقائيًا كبدون سيريال (fallback)', 'info');
+    } else {
+      showToast('تم الإضافة للسلة');
+    }
   } else {
     // Serial product: always open serial picker
     openSerialPicker(productId, 1);
   }
+  persistCartDrafts();
 }
 
 function openSerialPicker(productId, qty) {
@@ -7433,6 +7602,7 @@ function confirmSerialPicker() {
 }
 
 function renderCart() {
+  persistCartDrafts();
   const container = document.getElementById('cartItems');
   
   if (currentCart.length === 0) {
@@ -7448,7 +7618,7 @@ function renderCart() {
           ${item.serials.map((s, si) => `<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;"><span style="font-size:0.65rem;color:var(--text2);min-width:14px">${si+1}.</span><span style="font-family:monospace;font-size:0.7rem;background:rgba(0,102,255,0.1);color:var(--accent);padding:2px 7px;border-radius:4px;border:1px solid rgba(0,102,255,0.2)">${s}</span></div>`).join('')}
         </div>`
       : item.noSerial
-        ? `<div style="background:rgba(249,168,37,0.08);border-radius:6px;padding:5px 8px;border:1px solid rgba(249,168,37,0.25);font-size:0.68rem;color:var(--yellow)">📦 منتج بدون سيريال — كمية: ${item.qty}</div>`
+        ? `<div style="background:rgba(249,168,37,0.08);border-radius:6px;padding:5px 8px;border:1px solid rgba(249,168,37,0.25);font-size:0.68rem;color:var(--yellow)">📦 منتج بدون سيريال — كمية: ${item.qty}${item.isAmanat ? ' | 🟠 أمانة' : ''}</div>`
         : '';
     return `<div class="cart-item" style="flex-direction:column;align-items:stretch;gap:6px">
       <div style="display:flex;align-items:center;gap:8px">
@@ -7494,7 +7664,7 @@ function setCartQty(idx, val) {
 
   if (item.noSerial) {
     const stock = getProductStock(item.productId);
-    if (newQty > stock) { showToast(`المخزون المتاح: ${stock}`, 'error'); renderCart(); return; }
+    if (!item.isAmanat && newQty > stock) { showToast(`المخزون المتاح: ${stock}`, 'error'); renderCart(); return; }
     item.qty = newQty;
     renderCart();
     return;
@@ -7514,7 +7684,7 @@ function changeCartQty(idx, delta) {
 
   if (item.noSerial) {
     const stock = getProductStock(item.productId);
-    if (delta > 0 && newQty > stock) { showToast('لا يوجد مخزون كافٍ', 'error'); return; }
+    if (!item.isAmanat && delta > 0 && newQty > stock) { showToast('لا يوجد مخزون كافٍ', 'error'); return; }
     item.qty = newQty;
     renderCart();
     return;
@@ -7534,6 +7704,7 @@ function changeCartQty(idx, delta) {
 function removeFromCart(idx) {
   currentCart.splice(idx, 1);
   renderCart();
+  persistCartDrafts();
 }
 
 function clearCart() {
@@ -7541,6 +7712,7 @@ function clearCart() {
   if (!confirm('هل تريد مسح السلة؟')) return;
   currentCart = [];
   renderCart();
+  clearDraftByKey(POS_CART_DRAFT_KEY);
 }
 
 function updateCartTotals() {
@@ -7649,7 +7821,7 @@ function completeSale(forceRun = false) {
   currentCart.forEach(item => {
     if (item.noSerial) {
       const product = DB.products.find(p => p.id === item.productId);
-      if (product) product.stockQty = Math.max(0, (product.stockQty || 0) - item.qty);
+      if (product) product.stockQty = item.isAmanat ? ((product.stockQty || 0) - item.qty) : Math.max(0, (product.stockQty || 0) - item.qty);
     } else {
       item.serials.forEach(serial => {
         const s = DB.serials.find(x => x.serial === serial);
@@ -7669,7 +7841,8 @@ function completeSale(forceRun = false) {
       qty: item.qty,
       price: item.price,
       buyPrice: Number(actualCostByProduct[item.productId] != null ? actualCostByProduct[item.productId] : item.buyPrice || 0),
-      serials: item.serials
+      serials: item.serials,
+      isAmanat: !!item.isAmanat
     })),
     subtotal,
     discount,
@@ -7683,6 +7856,7 @@ function completeSale(forceRun = false) {
   };
 
   DB.saleInvoices.push(invoice);
+  const amanatCount = currentCart.filter(i => i.isAmanat).reduce((s,i)=>s+(i.qty||0),0);
   autoSaveCustomer(customer, customerPhone);
 
   if (paymentType !== 'installment' && invoiceType === 'cash') {
@@ -7713,12 +7887,13 @@ function completeSale(forceRun = false) {
 
   currentCart = [];
   renderCart();
+  clearDraftByKey(POS_CART_DRAFT_KEY);
   document.getElementById('discountInput').value = '';
   document.getElementById('cartCustomer').value = '';
   document.getElementById('cartCustomerPhone').value = '';
   document.getElementById('cartCustomerSelect').value = '';
   const _pp = document.getElementById('salePartialPaid'); if (_pp) _pp.value = '';
-  showToast('✅ تم إتمام البيع بنجاح');
+  showToast(amanatCount > 0 ? `✅ تم البيع، مع تسجيل ${amanatCount} وحدة كأمانات` : '✅ تم إتمام البيع بنجاح');
 }
 
 function completePurchaseFromPOS() {
@@ -7780,6 +7955,7 @@ function completePurchaseFromPOS() {
 
   currentCart = [];
   renderCart();
+  clearDraftByKey(POS_CART_DRAFT_KEY);
   document.getElementById('discountInput').value = '';
   document.getElementById('cartCustomer').value = '';
   document.getElementById('cartCustomerPhone').value = '';
@@ -10449,9 +10625,10 @@ document.addEventListener('keydown', function(e) {
 
 // منع إعادة تحميل الصفحة بالخطأ مع وجود تغييرات
 window.addEventListener('beforeunload', function(e) {
-  if (currentCart.length > 0) {
+  persistCartDrafts();
+  if (hasUnsavedDraftWork()) {
     e.preventDefault();
-    e.returnValue = 'لديك منتجات في السلة، هل تريد المغادرة؟';
+    e.returnValue = 'لديك بيانات غير محفوظة (سلة/مسودة فاتورة)، هل تريد المغادرة؟';
   }
 });
 
@@ -10510,7 +10687,10 @@ document.addEventListener('click', function(e) {
 
 // تهيئة عند التحميل
 loadDB();
+restoreCartDrafts();
+tryAutoLoginFromSession();
 showPage('dashboard');
+if (currentCart && currentCart.length) { try { renderCart(); } catch(e) {} }
 setTimeout(updateGhStatusCard, 0);
 // أول تشغيل: لو مافيش Token محفوظ → اعرض modal الربط
 setTimeout(checkFirstRun, 300);
