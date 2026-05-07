@@ -705,6 +705,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
     <div class="nav-dropdown-header">🛒 الفواتير والمبيعات</div>
     <div class="nav-dropdown-item" data-page="pos"><span class="icon">💳</span> نقطة البيع (POS)</div>
     <div class="nav-dropdown-item" data-page="newinvoice"><span class="icon">🧾</span> New Invoic</div>
+    <div class="nav-dropdown-item" data-page="amanat"><span class="icon">🟠</span> متابعة الأمانات</div>
     <div class="nav-dropdown-item" data-page="invoices"><span class="icon">🧾</span> أرشيف الفواتير</div>
     <div class="nav-dropdown-item" data-page="installments"><span class="icon">📆</span> التقسيط</div>
     <div class="nav-dropdown-item" data-page="returns"><span class="icon">↩️</span> المرتجعات</div>
@@ -1041,6 +1042,27 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
       </div>
       <div class="table-container">
         <div class="overflow-x"><table class="data-table"><thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>المنتجات</th><th>الإجمالي</th><th>نوع الفاتورة</th><th>طريقة الدفع</th><th>البائع</th><th>إجراءات</th></tr></thead><tbody id="invoicesTbody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- AMANAT TRACKING -->
+    <div class="page" id="page-amanat">
+      <div class="page-header">
+        <div class="page-title">🟠 متابعة الأمانات</div>
+        <div class="table-actions">
+          <input class="search-input" type="text" id="amanatSearch" placeholder="بحث بالعميل/رقم الفاتورة/المنتج..." oninput="renderAmanatPage(this.value)">
+          <button class="btn btn-accent btn-sm" onclick="settleAllAmanatAuto()">⚡ تسوية تلقائية للمتاح</button>
+        </div>
+      </div>
+      <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+        <div class="stat-card orange" style="padding:14px"><div class="stat-value" style="font-size:1.1rem;color:var(--orange)" id="amanat-open-count">0</div><div class="stat-label">بنود أمانات مفتوحة</div></div>
+        <div class="stat-card yellow" style="padding:14px"><div class="stat-value" style="font-size:1.1rem;color:var(--yellow)" id="amanat-open-qty">0</div><div class="stat-label">إجمالي الكمية المفتوحة</div></div>
+      </div>
+      <div class="table-container">
+        <div class="overflow-x"><table class="data-table">
+          <thead><tr><th>الفاتورة</th><th>التاريخ</th><th>العميل</th><th>المنتج</th><th>نوع البند</th><th>مفتوح</th><th>متاح للتسوية</th><th>الإجراءات</th></tr></thead>
+          <tbody id="amanatTbody"></tbody>
+        </table></div>
       </div>
     </div>
 
@@ -2736,6 +2758,7 @@ let DB = {
   stockTransfers: [],
   stockCounts: [],
   asPayments: [],
+  accountOffsets: [],
   vouchers: [],
   settings: { nextInvoiceNum: 1, nextMaintNum: 1 }
 };
@@ -3345,6 +3368,7 @@ function showPage(page) {
   if (page === 'daily') renderDailyReport();
   if (page === 'pos') { renderPOSProducts(); setPOSMode('sale'); ensureSaleIssueButtonBinding(); }
   if (page === 'invoices' || page === 'newinvoice') renderInvoices();
+  if (page === 'amanat') renderAmanatPage();
   if (page === 'products') renderProductsTable();
   if (page === 'stockmovement') renderStockMovement();
   if (page === 'purchases') renderPurchases();
@@ -3569,6 +3593,37 @@ function addCashEntry(type, amount, method, desc) {
     user: currentUser ? currentUser.username : 'system'
   });
   saveDB();
+}
+
+function runFinanceStockRecheck(contextLabel = '') {
+  const issues = [];
+  (DB.products || []).forEach(p => {
+    if (p.hasSerial !== false) {
+      const serialAvail = (DB.serials || []).filter(s => s.productId === p.id && s.status === 'available').length;
+      const qty = Number(p.stockQty || 0);
+      // Serial product ideally يعتمد على السيريالات، لكن نسمح بـ fallback مع تنبيه.
+      if (qty > 0 && serialAvail === 0) {
+        issues.push(`تنبيه: ${p.name} بسيريال ومخزون كمي بدون سيريالات متاحة`);
+      }
+      if (serialAvail > 0 && qty > 0) {
+        issues.push(`تنبيه: ${p.name} فيه سيريالات متاحة ومعه stockQty كمي`);
+      }
+    } else {
+      if (Number(p.stockQty || 0) < 0) {
+        issues.push(`مخزون سالب في ${p.name}`);
+      }
+    }
+  });
+
+  // Refresh key views that represent finance + stock
+  try { renderTreasury(); } catch(e) {}
+  try { if (currentPage === 'products') renderProductsTable(); } catch(e) {}
+  try { if (currentPage === 'stockmovement') renderStockMovement(); } catch(e) {}
+
+  if (issues.length > 0) {
+    console.warn('Finance/Stock recheck', contextLabel, issues);
+    showToast(`⚠️ تمت المراجعة بعد ${contextLabel || 'العملية'} ويوجد ${issues.length} تنبيه بيانات`, 'info');
+  }
 }
 
 function addStockMovement(productId, type, qty, reason, user) {
@@ -4721,6 +4776,7 @@ function saveSupplier() {
   
   DB.suppliers.push({ id: Date.now(), name, phone, phone2, address, balance });
   saveDB();
+  runFinanceStockRecheck('إضافة مورد');
   closeModal('supplierModal');
   renderSuppliers();
   showToast('تم إضافة المورد');
@@ -4738,12 +4794,12 @@ function renderSuppliers() {
       <td>${s.address || '-'}</td>
       <td style="font-weight:700;color:${debt > 0 ? 'var(--red)' : 'var(--green)'}">${formatMoney(debt)}</td>
       <td>
-        <button class="btn btn-sm btn-accent" onclick="viewSupplierStatement(${s.id})">📋 السجل</button>
-        <button class="btn btn-sm btn-outline" onclick="openSupplierPaymentModal(${s.id})">💰 دفعة</button>
+        <button class="btn btn-sm btn-yellow" onclick="quickAddSupplierPayment('${s.id}')">💰 إضافة دفعة</button>
+        <button class="btn btn-sm btn-accent" onclick="openSupplierDetailedStatement('${s.id}')">📋 كشف تفصيلي</button>
         <button class="btn btn-sm btn-danger" onclick="deleteSupplier(${idx})">🗑️</button>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" style="text-align:center">لا يوجد موردين</td></tr>';
+  }).join('') || '<tr><td colspan="7" style="text-align:center">لا يوجد موردين</td></tr>';
 
   // سجل دفعات الموردين
   const payTbody = document.getElementById('supplierPaymentsTbody');
@@ -4758,6 +4814,25 @@ function renderSuppliers() {
       <td>${p.user || '-'}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" style="text-align:center">لا توجد دفعات</td></tr>';
+}
+
+function quickAddSupplierPayment(supplierId) {
+  openSupplierPaymentModal(parseInt(supplierId, 10));
+}
+
+function openSupplierDetailedStatement(supplierId) {
+  const s = DB.suppliers.find(x => String(x.id) === String(supplierId));
+  if (!s) return;
+  showPage('accountstatement');
+  const input = document.getElementById('asPhoneInput');
+  if (input) {
+    input.value = s.phone || s.phone2 || '';
+  }
+  if (s.phone || s.phone2) {
+    searchAccountStatement();
+    return;
+  }
+  renderASCard(s, 'supplier');
 }
 
 function viewSupplierStatement(supplierId) {
@@ -4970,6 +5045,7 @@ function saveSupplierPayment() {
   logActivity(type === 'payment' ? 'دفعة مورد' : 'توريد مورد', `${s.name} - ${formatMoney(amount)}`);
   
   saveDB();
+  runFinanceStockRecheck('دفعة مورد');
   closeModal('supplierPaymentModal');
   renderSuppliers();
   renderPurchases();
@@ -5005,6 +5081,7 @@ function saveCustomer() {
   
   DB.customers.push({ id: Date.now(), name, phone, phone2, address, balance });
   saveDB();
+  runFinanceStockRecheck('إضافة عميل');
   closeModal('customerModal');
   renderCustomersTable();
   updateCartCustomerSelect();
@@ -5025,11 +5102,34 @@ function renderCustomersTable(filter = '') {
       <td>${c.phone2 || '-'}</td>
       <td style="color:${debt > 0 ? 'var(--red)' : 'var(--green)'}">${formatMoney(debt)}</td>
       <td>
-        <button class="btn btn-sm btn-accent" onclick="viewCustomerStatement('${c.name}')">📋 كشف</button>
+        <button class="btn btn-sm btn-green" onclick="quickAddCustomerPayment('${c.id}')">💳 إضافة دفعة</button>
+        <button class="btn btn-sm btn-accent" onclick="openCustomerDetailedStatement('${c.id}')">📋 كشف تفصيلي</button>
         <button class="btn btn-sm btn-danger" onclick="deleteCustomer(${idx})">🗑️</button>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="5" style="text-align:center">لا يوجد عملاء</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="text-align:center">لا يوجد عملاء</td></tr>';
+}
+
+function quickAddCustomerPayment(customerId) {
+  const c = DB.customers.find(x => String(x.id) === String(customerId));
+  if (!c) return;
+  const balance = getCustomerOutstanding(c.id);
+  openASPaymentModal(String(c.id), 'customer', c.name, balance);
+}
+
+function openCustomerDetailedStatement(customerId) {
+  const c = DB.customers.find(x => String(x.id) === String(customerId));
+  if (!c) return;
+  showPage('accountstatement');
+  const input = document.getElementById('asPhoneInput');
+  if (input) {
+    input.value = c.phone || c.phone2 || '';
+  }
+  if (c.phone || c.phone2) {
+    searchAccountStatement();
+    return;
+  }
+  renderASCard(c, 'customer');
 }
 
 function setPOSMode(mode) {
@@ -5083,6 +5183,7 @@ function openNewSaleModal() {
   document.getElementById('nsQty').value = '1';
   document.getElementById('nsDiscount').value = '0';
   document.getElementById('nsPartialPaid').value = '';
+  const nsAmanat = document.getElementById('nsAmanatMode'); if (nsAmanat) nsAmanat.checked = false;
   document.getElementById('nsScanInput').value = '';
   updateNsSerialsCount();
   renderNewSaleCart();
@@ -5351,6 +5452,7 @@ function saveNewSaleInvoice() {
       price: item.price,
       buyPrice: Number(actualCostByProduct[item.productId] || 0),
       serials: item.serials,
+      noSerial: !!item.noSerial,
       isAmanat: !!item.isAmanat
     })),
     subtotal,
@@ -7842,6 +7944,7 @@ function completeSale(forceRun = false) {
       price: item.price,
       buyPrice: Number(actualCostByProduct[item.productId] != null ? actualCostByProduct[item.productId] : item.buyPrice || 0),
       serials: item.serials,
+      noSerial: !!item.noSerial,
       isAmanat: !!item.isAmanat
     })),
     subtotal,
@@ -8088,6 +8191,139 @@ function renderInvoices(filter = '') {
   if (tbody) tbody.innerHTML = rowsHTML;
   const newTbody = document.getElementById('newInvoiceTbody');
   if (newTbody) newTbody.innerHTML = rowsHTML;
+}
+
+function getAmanatOpenRows(filter = '') {
+  const q = (filter || '').toLowerCase().trim();
+  const rows = [];
+  (DB.saleInvoices || []).forEach(inv => {
+    (inv.items || []).forEach((item, itemIdx) => {
+      if (!item || !item.isAmanat) return;
+      const settledQty = Number(item.amanatSettledQty || 0);
+      const openQty = Math.max(0, Number(item.qty || 0) - settledQty);
+      if (openQty <= 0) return;
+      const text = `${inv.id} ${inv.customer || ''} ${item.name || ''}`.toLowerCase();
+      if (q && !text.includes(q)) return;
+      rows.push({
+        invoiceId: inv.id,
+        date: inv.date,
+        customer: inv.customer || '—',
+        productId: item.productId,
+        itemName: item.name || '—',
+        itemIdx,
+        qty: Number(item.qty || 0),
+        settledQty,
+        openQty,
+        noSerial: !!item.noSerial
+      });
+    });
+  });
+  return rows.sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+function getAmanatSettleCapacity(row) {
+  const product = DB.products.find(p => p.id === row.productId);
+  if (!product) return 0;
+  if (row.noSerial) return Math.max(0, Number(product.stockQty || 0));
+  return 0;
+}
+
+function settleAmanatRow(invoiceId, itemIdx, qty) {
+  const inv = DB.saleInvoices.find(x => x.id === invoiceId);
+  if (!inv || !inv.items || !inv.items[itemIdx]) return false;
+  const item = inv.items[itemIdx];
+  if (!item.isAmanat) return false;
+  const settledQty = Number(item.amanatSettledQty || 0);
+  const openQty = Math.max(0, Number(item.qty || 0) - settledQty);
+  const n = Math.floor(Number(qty || 0));
+  if (n <= 0 || n > openQty) return false;
+  const cap = getAmanatSettleCapacity({ productId: item.productId, noSerial: !!item.noSerial });
+  if (n > cap) return false;
+  item.amanatSettledQty = settledQty + n;
+  item.amanatSettledAt = new Date().toISOString();
+  if (!Array.isArray(item.amanatSettlements)) item.amanatSettlements = [];
+  item.amanatSettlements.push({
+    qty: n,
+    date: new Date().toISOString(),
+    user: currentUser ? currentUser.username : 'system'
+  });
+  saveDB();
+  return true;
+}
+
+function settleAmanatPrompt(invoiceId, itemIdx) {
+  const inv = DB.saleInvoices.find(x => x.id === invoiceId);
+  if (!inv || !inv.items || !inv.items[itemIdx]) return;
+  const item = inv.items[itemIdx];
+  const settledQty = Number(item.amanatSettledQty || 0);
+  const openQty = Math.max(0, Number(item.qty || 0) - settledQty);
+  const cap = getAmanatSettleCapacity({ productId: item.productId, noSerial: !!item.noSerial });
+  if (cap <= 0) { showToast('لا يوجد مخزون متاح للتسوية حالياً', 'error'); return; }
+  const maxQty = Math.min(openQty, cap);
+  const val = prompt(`تسوية أمانة للصنف: ${item.name}\nالكمية المفتوحة: ${openQty}\nالمتاح للتسوية: ${cap}\nأدخل كمية التسوية (حتى ${maxQty})`, String(maxQty));
+  if (val === null) return;
+  const qty = parseInt(val, 10);
+  if (!settleAmanatRow(invoiceId, itemIdx, qty)) { showToast('قيمة غير صالحة للتسوية', 'error'); return; }
+  showToast('تمت التسوية بنجاح', 'success');
+  renderAmanatPage(document.getElementById('amanatSearch')?.value || '');
+}
+
+function settleAmanatAutoOne(invoiceId, itemIdx) {
+  const inv = DB.saleInvoices.find(x => x.id === invoiceId);
+  if (!inv || !inv.items || !inv.items[itemIdx]) return;
+  const item = inv.items[itemIdx];
+  const settledQty = Number(item.amanatSettledQty || 0);
+  const openQty = Math.max(0, Number(item.qty || 0) - settledQty);
+  const cap = getAmanatSettleCapacity({ productId: item.productId, noSerial: !!item.noSerial });
+  const qty = Math.min(openQty, cap);
+  if (qty <= 0) { showToast('لا يوجد مخزون متاح للتسوية لهذا البند', 'error'); return; }
+  if (!settleAmanatRow(invoiceId, itemIdx, qty)) { showToast('تعذر التسوية', 'error'); return; }
+  showToast(`تمت تسوية ${qty} وحدة تلقائياً`, 'success');
+  renderAmanatPage(document.getElementById('amanatSearch')?.value || '');
+}
+
+function settleAllAmanatAuto() {
+  const rows = getAmanatOpenRows(document.getElementById('amanatSearch')?.value || '');
+  let settledRows = 0;
+  let settledQty = 0;
+  rows.forEach(r => {
+    const cap = getAmanatSettleCapacity(r);
+    const qty = Math.min(r.openQty, cap);
+    if (qty > 0 && settleAmanatRow(r.invoiceId, r.itemIdx, qty)) {
+      settledRows++;
+      settledQty += qty;
+    }
+  });
+  if (settledRows === 0) { showToast('لا توجد كميات متاحة للتسوية حالياً', 'info'); return; }
+  showToast(`تمت تسوية ${settledQty} وحدة (${settledRows} بند)`, 'success');
+  renderAmanatPage(document.getElementById('amanatSearch')?.value || '');
+}
+
+function renderAmanatPage(filter = '') {
+  const rows = getAmanatOpenRows(filter);
+  const openQtyTotal = rows.reduce((s, r) => s + r.openQty, 0);
+  const countEl = document.getElementById('amanat-open-count');
+  const qtyEl = document.getElementById('amanat-open-qty');
+  if (countEl) countEl.textContent = rows.length;
+  if (qtyEl) qtyEl.textContent = openQtyTotal;
+  const tbody = document.getElementById('amanatTbody');
+  if (!tbody) return;
+  tbody.innerHTML = rows.map(r => {
+    const cap = getAmanatSettleCapacity(r);
+    return `<tr>
+      <td style="font-family:monospace;font-size:0.75rem">${r.invoiceId}</td>
+      <td>${new Date(r.date).toLocaleDateString('ar-EG')}</td>
+      <td>${r.customer}</td>
+      <td>${r.itemName}</td>
+      <td>${r.noSerial ? 'بدون سيريال' : 'بسيريال'}</td>
+      <td><span style="font-weight:700;color:var(--orange)">${r.openQty}</span> / ${r.qty}</td>
+      <td><span style="font-weight:700;color:${cap > 0 ? 'var(--green)' : 'var(--red)'}">${cap}</span></td>
+      <td>
+        <button class="btn btn-sm btn-accent" onclick="settleAmanatAutoOne('${r.invoiceId}', ${r.itemIdx})">⚡ تلقائي</button>
+        <button class="btn btn-sm btn-outline" onclick="settleAmanatPrompt('${r.invoiceId}', ${r.itemIdx})">✍️ كمية</button>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center">لا توجد أمانات مفتوحة</td></tr>';
 }
 
 function viewInvoice(id) {
@@ -8641,6 +8877,100 @@ function renderASCardInto(entity, type, containerId) {
   if (el) el.innerHTML = document.getElementById('asResult').innerHTML;
 }
 
+function getUnifiedOffsetRecords(customerId, supplierId) {
+  DB.accountOffsets = DB.accountOffsets || [];
+  return DB.accountOffsets.filter(x =>
+    String(x.customerId) === String(customerId) &&
+    String(x.supplierId) === String(supplierId)
+  );
+}
+
+function getUnifiedOffsetTotal(customerId, supplierId) {
+  return getUnifiedOffsetRecords(customerId, supplierId).reduce((s, x) => s + (Number(x.amount) || 0), 0);
+}
+
+function computeUnifiedAfterOffset(saleBalance, purBalance, offsetTotal) {
+  const maxSettle = Math.max(0, Math.min(Math.max(0, saleBalance), Math.max(0, purBalance)));
+  const applied = Math.max(0, Math.min(Number(offsetTotal) || 0, maxSettle));
+  return {
+    applied,
+    saleAfter: Math.max(0, Math.max(0, saleBalance) - applied),
+    purAfter: Math.max(0, Math.max(0, purBalance) - applied)
+  };
+}
+
+function previewUnifiedOffset(customerId, supplierId) {
+  const saleNow = Number(document.getElementById('uoSaleNow')?.dataset.value || 0);
+  const purNow = Number(document.getElementById('uoPurNow')?.dataset.value || 0);
+  const oldOffset = getUnifiedOffsetTotal(customerId, supplierId);
+  const extra = Number(document.getElementById('uoOffsetInput')?.value || 0);
+  const after = computeUnifiedAfterOffset(saleNow, purNow, oldOffset + Math.max(0, extra));
+  const saleEl = document.getElementById('uoSaleAfter');
+  const purEl = document.getElementById('uoPurAfter');
+  const netEl = document.getElementById('uoNetAfter');
+  if (saleEl) saleEl.textContent = formatMoney(after.saleAfter);
+  if (purEl) purEl.textContent = formatMoney(after.purAfter);
+  if (netEl) {
+    const net = after.saleAfter - after.purAfter;
+    netEl.textContent = `${formatMoney(Math.abs(net))} — ${net > 0 ? 'مديون لنا' : net < 0 ? 'نحن مدينون له' : 'متساوي'}`;
+  }
+}
+
+function applyUnifiedOffset(customerId, supplierId, customerName, supplierName) {
+  const amount = Number(document.getElementById('uoOffsetInput')?.value || 0);
+  const note = (document.getElementById('uoOffsetNote')?.value || '').trim();
+  const saleNow = Number(document.getElementById('uoSaleNow')?.dataset.value || 0);
+  const purNow = Number(document.getElementById('uoPurNow')?.dataset.value || 0);
+  const oldOffset = getUnifiedOffsetTotal(customerId, supplierId);
+  const maxExtra = Math.max(0, Math.min(Math.max(0, saleNow), Math.max(0, purNow)) - oldOffset);
+  if (amount <= 0) { showToast('أدخل قيمة تسوية أكبر من صفر', 'error'); return; }
+  if (amount > maxExtra) { showToast(`أقصى تسوية إضافية متاحة: ${formatMoney(maxExtra)}`, 'error'); return; }
+
+  DB.accountOffsets = DB.accountOffsets || [];
+  DB.accountOffsets.push({
+    id: Date.now(),
+    date: new Date().toISOString(),
+    customerId: String(customerId),
+    supplierId: String(supplierId),
+    customerName: customerName || '',
+    supplierName: supplierName || '',
+    amount,
+    note,
+    user: currentUser ? currentUser.username : 'system'
+  });
+  logActivity('تسوية عميل/مورد', `${customerName} - ${formatMoney(amount)}`);
+  saveDB();
+  searchAccountStatement();
+  showToast('تم حفظ التسوية وظهرت في كشف الحساب', 'success');
+}
+
+function editUnifiedOffset(offsetId) {
+  DB.accountOffsets = DB.accountOffsets || [];
+  const rec = DB.accountOffsets.find(x => x.id == offsetId);
+  if (!rec) return;
+  const val = prompt('تعديل قيمة التسوية:', String(rec.amount || 0));
+  if (val === null) return;
+  const newAmount = Number(val);
+  if (!(newAmount > 0)) { showToast('قيمة غير صالحة', 'error'); return; }
+  rec.amount = newAmount;
+  rec.editedAt = new Date().toISOString();
+  rec.editedBy = currentUser ? currentUser.username : 'system';
+  saveDB();
+  searchAccountStatement();
+  showToast('تم تعديل التسوية', 'success');
+}
+
+function deleteUnifiedOffset(offsetId) {
+  DB.accountOffsets = DB.accountOffsets || [];
+  const rec = DB.accountOffsets.find(x => x.id == offsetId);
+  if (!rec) return;
+  if (!confirm('هل تريد حذف هذه التسوية؟')) return;
+  DB.accountOffsets = DB.accountOffsets.filter(x => x.id != offsetId);
+  saveDB();
+  searchAccountStatement();
+  showToast('تم حذف التسوية', 'success');
+}
+
 function renderUnifiedASCard(customer, supplier) {
   // Build combined transactions for a person who is both customer and supplier
   let transactions = [];
@@ -8749,13 +9079,31 @@ function renderUnifiedASCard(customer, supplier) {
 
   transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  const totalSaleDebit = transactions.reduce((s, t) => s + t.saleDebit, 0);
-  const totalSaleCredit = transactions.reduce((s, t) => s + t.saleCredit, 0);
-  const totalPurDebit = transactions.reduce((s, t) => s + t.purDebit, 0);
-  const totalPurCredit = transactions.reduce((s, t) => s + t.purCredit, 0);
   const saleBalance = getCustomerOutstanding(customer.id); // >0 = owes us
   const purBalance = getSupplierOutstanding(supplier.id);  // >0 = we owe them
   const netBalance = saleBalance - purBalance;
+  const offsetRecords = getUnifiedOffsetRecords(customer.id, supplier.id);
+  const offsetTotal = getUnifiedOffsetTotal(customer.id, supplier.id);
+  const afterOffset = computeUnifiedAfterOffset(saleBalance, purBalance, offsetTotal);
+  const extraMax = Math.max(0, Math.min(Math.max(0, saleBalance), Math.max(0, purBalance)) - offsetTotal);
+
+  offsetRecords.forEach(o => {
+    transactions.push({
+      date: o.date,
+      desc: `🔁 تسوية داخلية عميل/مورد${o.note ? ' — ' + o.note : ''}`,
+      saleDebit: 0,
+      saleCredit: Number(o.amount || 0),
+      purDebit: 0,
+      purCredit: Number(o.amount || 0),
+      badge: '<span class="badge badge-purple">تسوية</span>',
+      bg: 'rgba(124,58,237,0.07)'
+    });
+  });
+  transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+  const totalSaleDebit = transactions.reduce((s, t) => s + (Number(t.saleDebit) || 0), 0);
+  const totalSaleCredit = transactions.reduce((s, t) => s + (Number(t.saleCredit) || 0), 0);
+  const totalPurDebit = transactions.reduce((s, t) => s + (Number(t.purDebit) || 0), 0);
+  const totalPurCredit = transactions.reduce((s, t) => s + (Number(t.purCredit) || 0), 0);
 
   const rows = transactions.map(t => `<tr style="background:${t.bg}">
     <td style="font-size:0.75rem;white-space:nowrap">${new Date(t.date).toLocaleDateString('ar-EG')}</td>
@@ -8798,6 +9146,56 @@ function renderUnifiedASCard(customer, supplier) {
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px;flex-wrap:wrap">
       <button class="btn btn-accent btn-sm" onclick="openASPaymentModal('${customer.id}','customer','${customer.name}',${saleBalance})">💳 دفعة عميل</button>
       <button class="btn btn-yellow btn-sm" onclick="openASPaymentModal('${supplier.id}','supplier','${supplier.name}',${purBalance})">💰 دفعة مورد</button>
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:0.82rem;font-weight:800;color:var(--accent);margin-bottom:8px">🧮 تسوية عميل/مورد (معاينة + تعديل)</div>
+      <div class="grid-2" style="margin-bottom:8px">
+        <div style="background:var(--surface2);border-radius:8px;padding:8px">
+          <div style="font-size:0.7rem;color:var(--text2)">رصيد عميل قبل التسوية</div>
+          <div id="uoSaleNow" data-value="${Math.max(0, saleBalance)}" style="font-weight:800;color:var(--red)">${formatMoney(Math.max(0, saleBalance))}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:8px">
+          <div style="font-size:0.7rem;color:var(--text2)">رصيد مورد قبل التسوية</div>
+          <div id="uoPurNow" data-value="${Math.max(0, purBalance)}" style="font-weight:800;color:var(--orange)">${formatMoney(Math.max(0, purBalance))}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <input type="number" id="uoOffsetInput" min="0" max="${extraMax}" step="0.01" placeholder="قيمة تسوية إضافية (حتى ${formatMoney(extraMax)})" oninput="previewUnifiedOffset('${customer.id}','${supplier.id}')" style="flex:1;min-width:180px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px">
+        <input type="text" id="uoOffsetNote" placeholder="ملاحظة التسوية (اختياري)" style="flex:1;min-width:180px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px">
+        <button class="btn btn-purple btn-sm" onclick="applyUnifiedOffset('${customer.id}','${supplier.id}','${customer.name}','${supplier.name}')">💾 حفظ التسوية</button>
+      </div>
+      <div style="font-size:0.73rem;color:var(--text2);margin-bottom:6px">إجمالي التسويات المحفوظة: <b>${formatMoney(offsetTotal)}</b></div>
+      <div class="grid-2">
+        <div style="background:rgba(229,57,53,0.08);border:1px solid rgba(229,57,53,0.25);border-radius:8px;padding:8px">
+          <div style="font-size:0.7rem;color:var(--text2)">رصيد عميل بعد التسوية</div>
+          <div id="uoSaleAfter" style="font-weight:800;color:var(--red)">${formatMoney(afterOffset.saleAfter)}</div>
+        </div>
+        <div style="background:rgba(249,168,37,0.08);border:1px solid rgba(249,168,37,0.25);border-radius:8px;padding:8px">
+          <div style="font-size:0.7rem;color:var(--text2)">رصيد مورد بعد التسوية</div>
+          <div id="uoPurAfter" style="font-weight:800;color:var(--orange)">${formatMoney(afterOffset.purAfter)}</div>
+        </div>
+      </div>
+      <div id="uoNetAfter" style="margin-top:6px;font-size:0.78rem;font-weight:700;color:var(--accent)">${formatMoney(Math.abs(afterOffset.saleAfter - afterOffset.purAfter))} — ${(afterOffset.saleAfter - afterOffset.purAfter) > 0 ? 'مديون لنا' : (afterOffset.saleAfter - afterOffset.purAfter) < 0 ? 'نحن مدينون له' : 'متساوي'}</div>
+    </div>
+
+    <div class="table-container" style="margin-bottom:12px">
+      <div class="table-header"><div class="table-title">🧾 تسويات محفوظة (${offsetRecords.length})</div></div>
+      <div class="overflow-x"><table class="data-table">
+        <thead><tr><th>التاريخ</th><th>القيمة</th><th>ملاحظة</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
+        <tbody>
+          ${offsetRecords.length ? offsetRecords.map(o => `<tr>
+            <td>${new Date(o.date).toLocaleDateString('ar-EG')}</td>
+            <td style="font-weight:700;color:var(--purple)">${formatMoney(o.amount)}</td>
+            <td>${o.note || '-'}</td>
+            <td>${o.user || '-'}</td>
+            <td>
+              <button class="btn btn-sm btn-yellow" onclick="editUnifiedOffset('${o.id}')">✏️ تعديل</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteUnifiedOffset('${o.id}')">🗑️ حذف</button>
+            </td>
+          </tr>`).join('') : '<tr><td colspan="5" style="text-align:center">لا توجد تسويات محفوظة</td></tr>'}
+        </tbody>
+      </table></div>
     </div>
 
     <div class="table-container">
@@ -9058,6 +9456,7 @@ function saveASPayment() {
 
   logActivity('دفعة كشف حساب', `${entityName} - ${formatMoney(amount)}`);
   saveDB();
+  runFinanceStockRecheck('إضافة دفعة كشف حساب');
   closeModal('asPaymentModal');
   showToast('تم حفظ الدفعة بنجاح ✓');
 
@@ -9103,6 +9502,7 @@ function saveEditASPayment() {
   addCashEntry(newCashType, newAmount, newMethod, 'دفعة معدلة - ' + p.entityName);
   logActivity('تعديل دفعة كشف حساب', p.entityName + ' - ' + formatMoney(newAmount));
   saveDB();
+  runFinanceStockRecheck('تعديل دفعة كشف حساب');
   closeModal('editASPaymentModal');
   showToast('تم تعديل الدفعة');
   searchAccountStatement();
@@ -9118,6 +9518,7 @@ function deleteASPayment(paymentId) {
   DB.asPayments = DB.asPayments.filter(x => x.id != paymentId);
   logActivity('حذف دفعة كشف حساب', p.entityName + ' - ' + formatMoney(p.amount));
   saveDB();
+  runFinanceStockRecheck('حذف دفعة كشف حساب');
   showToast('تم حذف الدفعة');
   searchAccountStatement();
 }
@@ -9132,6 +9533,7 @@ function editASOpeningBalance(entityId, entityType, entityName, currentBalance) 
   else if (entityType === 'employee') { const e = DB.employees.find(x => x.id == entityId); if (e) e.balance = val; }
   logActivity('تعديل رصيد افتتاحي', entityName + ' - ' + formatMoney(val));
   saveDB();
+  runFinanceStockRecheck('تعديل رصيد افتتاحي');
   showToast('تم تعديل الرصيد الافتتاحي');
   searchAccountStatement();
 }
