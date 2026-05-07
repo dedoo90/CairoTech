@@ -1635,6 +1635,24 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
         </div>
       </div>
 
+      <!-- Startup / Privacy Settings -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:16px">
+        <div style="font-size:0.95rem;font-weight:700;margin-bottom:14px;color:var(--accent)">🔐 إعدادات التشغيل والخصوصية</div>
+        <div style="display:grid;gap:10px">
+          <label style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer">
+            <input type="checkbox" id="optRememberMe" style="width:16px;height:16px">
+            <span style="font-size:0.86rem;font-weight:700">تذكرني (دخول تلقائي)</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer">
+            <input type="checkbox" id="optRequireGhEachStart" style="width:16px;height:16px">
+            <span style="font-size:0.86rem;font-weight:700">طلب GitHub Key عند كل تشغيل</span>
+          </label>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button class="btn btn-accent btn-sm" onclick="saveStartupPrivacySettings()">💾 حفظ إعدادات التشغيل</button>
+        </div>
+      </div>
+
       <!-- Actions -->
       <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
         <div class="stat-card green" style="padding:18px;cursor:pointer" onclick="syncPagePull()">
@@ -2724,6 +2742,8 @@ const SESSION_USER_KEY = 'cairo_session_user';
 const POS_CART_DRAFT_KEY = 'cairo_pos_cart_draft_v1';
 const PURCHASE_DRAFT_KEY = 'cairo_purchase_draft_v1';
 const NS_DRAFT_KEY = 'cairo_newsale_draft_v1';
+const REMEMBER_ME_KEY = 'cairo_remember_me';
+const REQUIRE_GH_EACH_START_KEY = 'cairo_require_gh_each_start';
 
 // ================= الحالة =================
 let DB = {
@@ -2814,7 +2834,11 @@ function doLogin() {
 
   const launchApp = (usr) => {
     currentUser = usr;
-    localStorage.setItem(SESSION_USER_KEY, usr.username);
+    if (rememberMeEnabled()) {
+      localStorage.setItem(SESSION_USER_KEY, usr.username);
+    } else {
+      localStorage.removeItem(SESSION_USER_KEY);
+    }
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     const elN = document.getElementById('userName');
@@ -2874,6 +2898,7 @@ function doLogout() {
 }
 
 function tryAutoLoginFromSession() {
+  if (!rememberMeEnabled()) return;
   const username = localStorage.getItem(SESSION_USER_KEY);
   if (!username) return;
   const usr = DB.users.find(u => u.username === username);
@@ -2937,6 +2962,18 @@ let ghLastSaved    = null;
 function ghToken()  { return localStorage.getItem(GH_TOKEN_KEY) || ''; }
 function ghGistId() { return localStorage.getItem(GH_GIST_KEY)  || ''; }
 function ghHeaders(){ return { 'Authorization':'token '+ghToken(), 'Content-Type':'application/json', 'Accept':'application/vnd.github+json' }; }
+function rememberMeEnabled() { return localStorage.getItem(REMEMBER_ME_KEY) !== '0'; }
+function requireGhEachStartEnabled() { return localStorage.getItem(REQUIRE_GH_EACH_START_KEY) === '1'; }
+
+function applyStartupAccessPolicies() {
+  if (!rememberMeEnabled()) {
+    localStorage.removeItem(SESSION_USER_KEY);
+  }
+  if (requireGhEachStartEnabled()) {
+    localStorage.removeItem(GH_TOKEN_KEY);
+    localStorage.removeItem(GH_GIST_KEY);
+  }
+}
 
 function ghHeadersFromToken(token){
   return {
@@ -4782,17 +4819,58 @@ function saveSupplier() {
   showToast('تم إضافة المورد');
 }
 
+function findLinkedCustomerForSupplier(supplier) {
+  if (!supplier) return null;
+  const norm = v => String(v || '').replace(/\s/g, '').replace(/^\+?20/, '0').trim();
+  const sPhones = [norm(supplier.phone), norm(supplier.phone2)].filter(Boolean);
+  let c = null;
+  if (sPhones.length > 0) {
+    c = (DB.customers || []).find(x => {
+      const cPhones = [norm(x.phone), norm(x.phone2)].filter(Boolean);
+      return cPhones.some(p => sPhones.includes(p));
+    });
+  }
+  if (c) return c;
+  const sName = (supplier.name || '').trim().toLowerCase();
+  if (!sName) return null;
+  return (DB.customers || []).find(x => (x.name || '').trim().toLowerCase() === sName) || null;
+}
+
+function getSupplierNetDisplay(supplier) {
+  const purBalance = getSupplierOutstanding(supplier.id); // >0 we owe supplier
+  const linkedCustomer = findLinkedCustomerForSupplier(supplier);
+  if (!linkedCustomer) {
+    return { net: -purBalance, linked: false, customer: null };
+  }
+  const saleBalance = getCustomerOutstanding(linkedCustomer.id); // >0 customer owes us
+  const offsetTotal = typeof getUnifiedOffsetTotal === 'function'
+    ? getUnifiedOffsetTotal(linkedCustomer.id, supplier.id)
+    : 0;
+  const after = typeof computeUnifiedAfterOffset === 'function'
+    ? computeUnifiedAfterOffset(saleBalance, purBalance, offsetTotal)
+    : { saleAfter: Math.max(0, saleBalance), purAfter: Math.max(0, purBalance) };
+  // net > 0 => له علينا (client side after netting), net < 0 => علينا له (supplier side after netting)
+  const net = after.saleAfter - after.purAfter;
+  return { net, linked: true, customer: linkedCustomer };
+}
+
 function renderSuppliers() {
   const tbody = document.getElementById('suppliersTbody');
   tbody.innerHTML = DB.suppliers.map((s, idx) => {
-    const debt = getSupplierOutstanding(s.id);
+    const disp = getSupplierNetDisplay(s);
+    const netAbs = Math.abs(disp.net);
+    const netLabel = disp.net > 0 ? 'له عندنا' : disp.net < 0 ? 'علينا له' : 'متساوي';
+    const netColor = disp.net > 0 ? 'var(--green)' : disp.net < 0 ? 'var(--red)' : 'var(--text2)';
     return `<tr>
       <td>${idx + 1}</td>
       <td style="font-weight:700;cursor:pointer;color:var(--accent)" onclick="viewSupplierStatement(${s.id})">${s.name} 📋</td>
       <td>${s.phone || '-'}</td>
       <td>${s.phone2 || '-'}</td>
       <td>${s.address || '-'}</td>
-      <td style="font-weight:700;color:${debt > 0 ? 'var(--red)' : 'var(--green)'}">${formatMoney(debt)}</td>
+      <td style="font-weight:700;color:${netColor}">
+        ${formatMoney(netAbs)}
+        <div style="font-size:0.65rem;color:var(--text2)">${netLabel}${disp.linked ? ' | عميل+مورد' : ''}</div>
+      </td>
       <td>
         <button class="btn btn-sm btn-yellow" onclick="quickAddSupplierPayment('${s.id}')">💰 إضافة دفعة</button>
         <button class="btn btn-sm btn-accent" onclick="openSupplierDetailedStatement('${s.id}')">📋 كشف تفصيلي</button>
@@ -5094,13 +5172,46 @@ function renderCustomersTable(filter = '') {
   if (filter) customers = customers.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()) || (c.phone && c.phone.includes(filter)));
   
   tbody.innerHTML = customers.map((c, idx) => {
-    const debt = getCustomerOutstanding(c.id);
+    const linkedSupplier = (function(customer){
+      const norm = v => String(v || '').replace(/\s/g, '').replace(/^\+?20/, '0').trim();
+      const cPhones = [norm(customer.phone), norm(customer.phone2)].filter(Boolean);
+      let s = null;
+      if (cPhones.length > 0) {
+        s = (DB.suppliers || []).find(x => {
+          const sPhones = [norm(x.phone), norm(x.phone2)].filter(Boolean);
+          return sPhones.some(p => cPhones.includes(p));
+        });
+      }
+      if (s) return s;
+      const cName = (customer.name || '').trim().toLowerCase();
+      if (!cName) return null;
+      return (DB.suppliers || []).find(x => (x.name || '').trim().toLowerCase() === cName) || null;
+    })(c);
+    let net = getCustomerOutstanding(c.id); // >0 العميل مديون لنا
+    let linked = false;
+    if (linkedSupplier) {
+      linked = true;
+      const purBalance = getSupplierOutstanding(linkedSupplier.id); // >0 نحن مديونون له
+      const offsetTotal = typeof getUnifiedOffsetTotal === 'function'
+        ? getUnifiedOffsetTotal(c.id, linkedSupplier.id)
+        : 0;
+      const after = typeof computeUnifiedAfterOffset === 'function'
+        ? computeUnifiedAfterOffset(net, purBalance, offsetTotal)
+        : { saleAfter: Math.max(0, net), purAfter: Math.max(0, purBalance) };
+      net = after.saleAfter - after.purAfter;
+    }
+    const netAbs = Math.abs(net);
+    const netColor = net > 0 ? 'var(--red)' : net < 0 ? 'var(--green)' : 'var(--text2)';
+    const netLabel = net > 0 ? 'مديون لنا' : net < 0 ? 'له عندنا' : 'متساوي';
     return `<tr>
       <td>${idx + 1}</td>
       <td>${c.name}</td>
       <td>${c.phone || '-'}</td>
       <td>${c.phone2 || '-'}</td>
-      <td style="color:${debt > 0 ? 'var(--red)' : 'var(--green)'}">${formatMoney(debt)}</td>
+      <td style="color:${netColor};font-weight:700">
+        ${formatMoney(netAbs)}
+        <div style="font-size:0.65rem;color:var(--text2)">${netLabel}${linked ? ' | عميل+مورد' : ''}</div>
+      </td>
       <td>
         <button class="btn btn-sm btn-green" onclick="quickAddCustomerPayment('${c.id}')">💳 إضافة دفعة</button>
         <button class="btn btn-sm btn-accent" onclick="openCustomerDetailedStatement('${c.id}')">📋 كشف تفصيلي</button>
@@ -8338,6 +8449,18 @@ function reprintInvoice(id) {
   printInvoice(inv);
 }
 
+function previewInvoiceFromStatement(invoiceId) {
+  if (!invoiceId) return;
+  if (String(invoiceId).startsWith('INV-')) { viewInvoice(invoiceId); return; }
+  if (String(invoiceId).startsWith('PUR-')) { viewPurchaseInvoice(invoiceId); return; }
+}
+
+function editInvoiceFromStatement(invoiceId) {
+  if (!invoiceId) return;
+  if (String(invoiceId).startsWith('INV-')) { openEditSaleInvoice(invoiceId); return; }
+  if (String(invoiceId).startsWith('PUR-')) { editPurchaseInvoice(invoiceId); return; }
+}
+
 function exportInvoicesCSV() {
   let csv = 'رقم الفاتورة,التاريخ,العميل,الإجمالي,الربح,الدفع,النوع,بواسطة\n';
   DB.saleInvoices.forEach(inv => {
@@ -9005,6 +9128,7 @@ function renderUnifiedASCard(customer, supplier) {
     transactions.push({
       date: inv.date,
       desc: `📤 فاتورة بيع #${inv.id} — ${itemsSummary}`,
+      invoiceId: inv.id,
       saleDebit: inv.invoiceType === 'ajel' ? getSaleInvoiceDue(inv) : 0,
       saleCredit: 0,
       purDebit: 0, purCredit: 0,
@@ -9021,6 +9145,7 @@ function renderUnifiedASCard(customer, supplier) {
     transactions.push({
       date: p.date,
       desc: `📥 فاتورة شراء #${p.id} — ${itemsSummary}`,
+      invoiceId: p.id,
       saleDebit: 0, saleCredit: 0,
       purDebit: p.invoiceType === 'ajel' ? (p.total || 0) : 0, purCredit: 0,
       badge: '<span class="badge badge-yellow">شراء</span>',
@@ -9115,6 +9240,10 @@ function renderUnifiedASCard(customer, supplier) {
     <td style="color:var(--green);font-weight:${(t.saleCredit||t.purCredit)>0?'700':'400'}">
       ${t.saleCredit > 0 ? formatMoney(t.saleCredit) : t.purCredit > 0 ? formatMoney(t.purCredit) : '-'}
     </td>
+    <td>
+      ${t.invoiceId ? `<button class="btn btn-sm btn-accent" onclick="previewInvoiceFromStatement('${t.invoiceId}')">👁️</button>
+      <button class="btn btn-sm btn-yellow" onclick="editInvoiceFromStatement('${t.invoiceId}')">✏️</button>` : '<span style="color:var(--text2)">—</span>'}
+    </td>
   </tr>`).join('');
 
   const html = `
@@ -9201,13 +9330,14 @@ function renderUnifiedASCard(customer, supplier) {
     <div class="table-container">
       <div class="table-header"><div class="table-title">📋 كشف موحد — عميل ومورد (${transactions.length} حركة)</div></div>
       <div class="overflow-x"><table class="data-table">
-        <thead><tr><th>التاريخ</th><th>البيان</th><th>النوع</th><th style="color:var(--red)">مدين ↑</th><th style="color:var(--green)">دائن ↓</th></tr></thead>
+        <thead><tr><th>التاريخ</th><th>البيان</th><th>النوع</th><th style="color:var(--red)">مدين ↑</th><th style="color:var(--green)">دائن ↓</th><th>إجراءات</th></tr></thead>
         <tbody>
-          ${rows || '<tr><td colspan="5" style="text-align:center;padding:20px">لا توجد حركات</td></tr>'}
+          ${rows || '<tr><td colspan="6" style="text-align:center;padding:20px">لا توجد حركات</td></tr>'}
           <tr style="background:var(--surface2);font-weight:700">
             <td colspan="3">الإجمالي</td>
             <td style="color:var(--red)">${formatMoney(totalSaleDebit + totalPurDebit)}</td>
             <td style="color:var(--green)">${formatMoney(totalSaleCredit + totalPurCredit)}</td>
+            <td>—</td>
           </tr>
         </tbody>
       </table></div>
@@ -9245,6 +9375,7 @@ function renderASCard(entity, type) {
       transactions.push({
         date: inv.date,
         desc: `🧾 فاتورة بيع #${inv.id} — ${itemsSummary}`,
+        invoiceId: inv.id,
         debit: inv.invoiceType === 'ajel' ? getSaleInvoiceDue(inv) : 0,
         credit: 0,
         type: 'invoice'
@@ -9276,6 +9407,7 @@ function renderASCard(entity, type) {
         ? p.items.map(i => `${i.name} ×${i.qty}`).join('، ')
         : (DB.products.find(prod => prod.id === p.productId)?.name || '-');
       transactions.push({ date: p.date, desc: `🛍️ فاتورة شراء #${p.id} — ${itemsSummary}`, debit: p.invoiceType === 'ajel' ? (p.total || 0) : 0, credit: 0, type: 'invoice' });
+      transactions[transactions.length - 1].invoiceId = p.id;
     });
     DB.supplierPayments.filter(sp => sp.supplierId == entity.id && sp.type === 'payment').forEach(sp => {
       transactions.push({ date: sp.date, desc: sp.desc || 'دفعة للمورد', debit: 0, credit: sp.amount, type: 'payment' });
@@ -9383,7 +9515,12 @@ function renderASCard(entity, type) {
                     <button class="btn btn-sm btn-yellow" style="padding:3px 7px" onclick="openEditASPayment(${t.paymentId})">✏️</button>
                     <button class="btn btn-sm btn-danger" style="padding:3px 7px" onclick="deleteASPayment(${t.paymentId})">🗑️</button>
                    </td>`
-                : `<td><span style="font-size:0.65rem;color:var(--text2)">—</span></td>`;
+                : t.invoiceId
+                  ? `<td style="white-space:nowrap">
+                      <button class="btn btn-sm btn-accent" style="padding:3px 7px" onclick="previewInvoiceFromStatement('${t.invoiceId}')">👁️</button>
+                      <button class="btn btn-sm btn-yellow" style="padding:3px 7px" onclick="editInvoiceFromStatement('${t.invoiceId}')">✏️</button>
+                     </td>`
+                  : `<td><span style="font-size:0.65rem;color:var(--text2)">—</span></td>`;
               return `<tr style="background:${rowBg}">
                 <td style="font-size:0.78rem">${new Date(t.date).toLocaleDateString('ar-EG')}</td>
                 <td style="font-size:0.78rem">${icon} ${t.desc}</td>
@@ -10951,6 +11088,27 @@ function renderSyncPage() {
   if(gId)   gId.textContent   = ghGistId();
   if(tInput && !tInput.value) tInput.value = ghToken();
   if(gInput && !gInput.value) gInput.value = ghGistId();
+  const optRemember = document.getElementById('optRememberMe');
+  const optGhEachStart = document.getElementById('optRequireGhEachStart');
+  if (optRemember) optRemember.checked = rememberMeEnabled();
+  if (optGhEachStart) optGhEachStart.checked = requireGhEachStartEnabled();
+}
+
+function saveStartupPrivacySettings() {
+  const remember = !!document.getElementById('optRememberMe')?.checked;
+  const requireGhEach = !!document.getElementById('optRequireGhEachStart')?.checked;
+  localStorage.setItem(REMEMBER_ME_KEY, remember ? '1' : '0');
+  localStorage.setItem(REQUIRE_GH_EACH_START_KEY, requireGhEach ? '1' : '0');
+  if (!remember) {
+    localStorage.removeItem(SESSION_USER_KEY);
+  }
+  if (requireGhEach) {
+    localStorage.removeItem(GH_TOKEN_KEY);
+    localStorage.removeItem(GH_GIST_KEY);
+  }
+  renderSyncPage();
+  updateGhStatusCard();
+  showToast('تم حفظ إعدادات التشغيل');
 }
 
 async function syncPageConnect() {
@@ -11088,6 +11246,7 @@ document.addEventListener('click', function(e) {
 });
 
 // تهيئة عند التحميل
+applyStartupAccessPolicies();
 loadDB();
 restoreCartDrafts();
 tryAutoLoginFromSession();
