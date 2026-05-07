@@ -1020,7 +1020,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
           <button class="btn btn-outline btn-sm" onclick="startNewInvoiceFromPage()">🧾 إنشاء فاتورة</button>
         </div>
         <div class="overflow-x"><table class="data-table">
-          <thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>المنتجات</th><th>الإجمالي</th><th>نوع الفاتورة</th><th>طريقة الدفع</th><th>البائع</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>المنتجات</th><th>الإجمالي</th><th>نوع الفاتورة</th><th>طريقة الدفع</th><th>ملاحظة</th><th>البائع</th><th>إجراءات</th></tr></thead>
           <tbody id="newInvoiceTbody"></tbody>
         </table></div>
       </div>
@@ -1041,7 +1041,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
         <div class="stat-card yellow" style="padding:14px"><div class="stat-value" style="font-size:1.1rem;color:var(--yellow)" id="inv-count">0</div><div class="stat-label">عدد الفواتير</div></div>
       </div>
       <div class="table-container">
-        <div class="overflow-x"><table class="data-table"><thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>المنتجات</th><th>الإجمالي</th><th>نوع الفاتورة</th><th>طريقة الدفع</th><th>البائع</th><th>إجراءات</th></tr></thead><tbody id="invoicesTbody"></tbody></table></div>
+        <div class="overflow-x"><table class="data-table"><thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>المنتجات</th><th>الإجمالي</th><th>نوع الفاتورة</th><th>طريقة الدفع</th><th>ملاحظة</th><th>البائع</th><th>إجراءات</th></tr></thead><tbody id="invoicesTbody"></tbody></table></div>
       </div>
     </div>
 
@@ -1114,7 +1114,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
           <button class="btn btn-outline btn-sm" onclick="exportPurchasesCSV()">📥 CSV</button>
         </div>
         <div class="overflow-x"><table class="data-table">
-          <thead><tr><th>#</th><th>التاريخ</th><th>المورد</th><th>تليفون المورد</th><th>الأصناف</th><th>الإجمالي</th><th>نوع الفاتورة</th><th>طريقة الدفع</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>#</th><th>التاريخ</th><th>المورد</th><th>تليفون المورد</th><th>الأصناف</th><th>الإجمالي</th><th>نوع الفاتورة</th><th>طريقة الدفع</th><th>ملاحظة</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
           <tbody id="purchasesTbody"></tbody>
         </table></div>
       </div>
@@ -4593,6 +4593,7 @@ function renderPurchases(filter = '') {
       <td style="font-weight:700">${formatMoney(p.total)}</td>
       <td>${getInvoiceTypeLabel(p.invoiceType)}</td>
       <td>${getPaymentLabel(p.paymentMethod)}</td>
+      <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(p.note || '').replace(/"/g,'&quot;')}">${p.note || '-'}</td>
       <td>${p.user || '-'}</td>
       <td>
         <button class="btn btn-sm btn-accent" onclick="viewPurchaseInvoice('${p.id}')">👁️</button>
@@ -4601,7 +4602,7 @@ function renderPurchases(filter = '') {
         ${can('deleteData') ? `<button class="btn btn-sm btn-danger" onclick="deletePurchaseInvoice('${p.id}')">🗑️</button>` : ''}
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="10" style="text-align:center">لا توجد فواتير</td></tr>';
+  }).join('') || '<tr><td colspan="11" style="text-align:center">لا توجد فواتير</td></tr>';
 }
 
 function viewPurchaseInvoice(id) {
@@ -8305,6 +8306,7 @@ function renderInvoices(filter = '') {
       <td>${formatMoney(inv.total)}</td>
       <td>${getInvoiceTypeLabel(inv.invoiceType)}</td>
       <td>${getPaymentLabel(inv.payment)}</td>
+      <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(inv.note || '').replace(/"/g,'&quot;')}">${inv.note || '-'}</td>
       <td>${inv.user || '-'}</td>
       <td>
         <button class="btn btn-sm btn-accent" onclick="viewInvoice('${inv.id}')">👁️</button>
@@ -8315,7 +8317,7 @@ function renderInvoices(filter = '') {
         ${can('deleteData') ? `<button class="btn btn-sm btn-danger" onclick="deleteSaleInvoice('${inv.id}')">🗑️</button>` : ''}
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="9" style="text-align:center">لا توجد فواتير</td></tr>';
+  }).join('') || '<tr><td colspan="10" style="text-align:center">لا توجد فواتير</td></tr>';
 
   const tbody = document.getElementById('invoicesTbody');
   if (tbody) tbody.innerHTML = rowsHTML;
