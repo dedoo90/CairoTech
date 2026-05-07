@@ -2340,6 +2340,24 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
 
   <hr class="divider">
   <div style="font-weight:700;font-size:0.88rem;margin-bottom:10px;color:var(--accent)">➕ أصناف الفاتورة</div>
+  <div style="background:var(--surface2);border:1px dashed var(--accent);border-radius:10px;padding:10px;margin-bottom:10px">
+    <div style="font-size:0.78rem;font-weight:700;color:var(--accent);margin-bottom:8px">إضافة / استبدال صنف داخل الفاتورة</div>
+    <div class="grid-2" style="gap:6px">
+      <div class="form-group" style="margin:0"><label>بحث الصنف</label>
+        <input type="text" id="editSaleAddSearch" placeholder="اكتب اسم الصنف..." oninput="filterEditSaleProducts(this.value)">
+      </div>
+      <div class="form-group" style="margin:0"><label>الصنف</label>
+        <select id="editSaleAddProduct" onchange="onEditSaleAddProductChange()"><option value="">اختر الصنف...</option></select>
+      </div>
+      <div class="form-group" style="margin:0"><label>الكمية</label><input type="number" id="editSaleAddQty" min="1" value="1"></div>
+      <div class="form-group" style="margin:0"><label>سعر البيع</label><input type="number" id="editSaleAddPrice" min="0" step="0.01"></div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+      <button class="btn btn-accent btn-sm" onclick="addItemToEditSaleInvoice()">➕ إضافة صنف</button>
+      <button class="btn btn-yellow btn-sm" onclick="replaceEditSaleItem()">🔁 استبدال الصنف المحدد</button>
+      <span id="editSaleReplaceTargetLabel" style="font-size:0.72rem;color:var(--text2);align-self:center">هدف الاستبدال: غير محدد</span>
+    </div>
+  </div>
   <div id="editSaleInvItems"></div>
 
   <div class="grid-2" style="margin-top:10px">
@@ -8498,6 +8516,7 @@ function exportInvoicesCSV() {
 
 // ================= تعديل فاتورة البيع (كامل) =================
 let editSaleInvItems = []; // سلة مؤقتة للتعديل
+let editSaleReplaceTargetIdx = -1; // العنصر المحدد للاستبدال
 
 function openEditSaleInvoice(id) {
   const inv = DB.saleInvoices.find(i => i.id === id);
@@ -8512,6 +8531,16 @@ function openEditSaleInvoice(id) {
   document.getElementById('editSaleInvPayment').value = inv.payment || 'cash';
   document.getElementById('editSaleInvDiscount').value = inv.discount || 0;
   document.getElementById('editSaleInvNote').value = inv.note || '';
+  editSaleReplaceTargetIdx = -1;
+  const targetLabel = document.getElementById('editSaleReplaceTargetLabel');
+  if (targetLabel) targetLabel.textContent = 'لم يتم تحديد صنف بعد';
+  const searchEl = document.getElementById('editSaleAddSearch');
+  if (searchEl) searchEl.value = '';
+  const qtyEl = document.getElementById('editSaleAddQty');
+  if (qtyEl) qtyEl.value = 1;
+  const priceEl = document.getElementById('editSaleAddPrice');
+  if (priceEl) priceEl.value = '';
+  filterEditSaleProducts('');
 
   renderEditSaleItems();
   openModal('editSaleInvoiceModal');
@@ -8547,7 +8576,10 @@ function renderEditSaleItems() {
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <span style="font-weight:700;font-size:0.85rem">${item.name}</span>
-          <button onclick="removeEditSaleItem(${idx})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem">🗑️</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-sm btn-outline" onclick="setEditSaleReplaceTarget(${idx})">🎯 استبدال</button>
+            <button onclick="removeEditSaleItem(${idx})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem">🗑️</button>
+          </div>
         </div>
         ${serialsDisplay}
         <div class="grid-2" style="gap:6px;margin-top:6px">
@@ -8582,7 +8614,89 @@ function renderEditSaleItems() {
 function removeEditSaleItem(idx) {
   if (!confirm('هل تريد حذف هذا الصنف من الفاتورة؟')) return;
   editSaleInvItems.splice(idx, 1);
+  if (editSaleReplaceTargetIdx === idx) editSaleReplaceTargetIdx = -1;
+  if (editSaleReplaceTargetIdx > idx) editSaleReplaceTargetIdx--;
+  const targetLabel = document.getElementById('editSaleReplaceTargetLabel');
+  if (targetLabel && editSaleReplaceTargetIdx === -1) targetLabel.textContent = 'لم يتم تحديد صنف بعد';
   renderEditSaleItems();
+}
+
+function filterEditSaleProducts(query) {
+  const select = document.getElementById('editSaleAddProduct');
+  if (!select) return;
+  const q = (query || '').toLowerCase().trim();
+  const list = (DB.products || []).filter(p => {
+    if (!q) return true;
+    return (p.name || '').toLowerCase().includes(q)
+      || (p.code || '').toLowerCase().includes(q);
+  });
+  select.innerHTML = `<option value="">اختر صنف...</option>` + list.map(p =>
+    `<option value="${p.id}">${p.name} ${p.code ? `— ${p.code}` : ''}</option>`
+  ).join('');
+  if (list.length > 0) {
+    select.value = String(list[0].id);
+    onEditSaleAddProductChange();
+  }
+}
+
+function onEditSaleAddProductChange() {
+  const productId = document.getElementById('editSaleAddProduct')?.value;
+  const p = DB.products.find(x => String(x.id) === String(productId));
+  const priceEl = document.getElementById('editSaleAddPrice');
+  if (!p || !priceEl) return;
+  priceEl.value = Number(p.sellPrice || 0);
+}
+
+function buildEditSaleDraftItemFromInputs() {
+  const productId = document.getElementById('editSaleAddProduct')?.value;
+  if (!productId) { showToast('اختر الصنف أولاً', 'error'); return null; }
+  const p = DB.products.find(x => String(x.id) === String(productId));
+  if (!p) { showToast('الصنف غير موجود', 'error'); return null; }
+  const qty = Math.max(1, parseInt(document.getElementById('editSaleAddQty')?.value || '1', 10) || 1);
+  const price = Math.max(0, parseFloat(document.getElementById('editSaleAddPrice')?.value || String(p.sellPrice || 0)) || 0);
+  if (p.hasSerial) {
+    showToast('تنبيه: هذا الصنف بسيريال، تمت إضافته بدون سيريال (fallback)', 'warning');
+  }
+  return {
+    productId: p.id,
+    name: p.name,
+    qty,
+    price,
+    buyPrice: Number(p.buyPrice || 0),
+    serials: []
+  };
+}
+
+function addItemToEditSaleInvoice() {
+  const item = buildEditSaleDraftItemFromInputs();
+  if (!item) return;
+  editSaleInvItems.push(item);
+  renderEditSaleItems();
+  showToast('تم إضافة الصنف إلى الفاتورة', 'success');
+}
+
+function setEditSaleReplaceTarget(idx) {
+  if (idx < 0 || idx >= editSaleInvItems.length) return;
+  editSaleReplaceTargetIdx = idx;
+  const item = editSaleInvItems[idx];
+  const targetLabel = document.getElementById('editSaleReplaceTargetLabel');
+  if (targetLabel) targetLabel.textContent = `سيتم الاستبدال مكان: ${item.name} (بند ${idx + 1})`;
+  showToast(`تم تحديد بند ${idx + 1} للاستبدال`, 'info');
+}
+
+function replaceEditSaleItem() {
+  if (editSaleReplaceTargetIdx < 0 || editSaleReplaceTargetIdx >= editSaleInvItems.length) {
+    showToast('حدد أولاً الصنف المراد استبداله من الفاتورة', 'error');
+    return;
+  }
+  const item = buildEditSaleDraftItemFromInputs();
+  if (!item) return;
+  editSaleInvItems[editSaleReplaceTargetIdx] = item;
+  const targetLabel = document.getElementById('editSaleReplaceTargetLabel');
+  if (targetLabel) targetLabel.textContent = 'لم يتم تحديد صنف بعد';
+  editSaleReplaceTargetIdx = -1;
+  renderEditSaleItems();
+  showToast('تم استبدال الصنف بنجاح', 'success');
 }
 
 // Serial scan in edit sale invoice
