@@ -1914,6 +1914,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
       </select>
     </div>
   </div>
+  <div class="form-group"><label>ملاحظة الفاتورة</label><input type="text" id="purNote" placeholder="ملاحظة اختيارية..."></div>
 
   <hr class="divider">
   <div style="font-weight:700;font-size:0.88rem;margin-bottom:10px;color:var(--accent)">➕ إضافة صنف للفاتورة</div>
@@ -2045,6 +2046,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
     <div class="form-group"><label>خصم</label><input type="number" id="nsDiscount" value="0" min="0" step="0.01" oninput="renderNewSaleCart()"></div>
     <div class="form-group"><label>المدفوع الآن (للآجل)</label><input type="number" id="nsPartialPaid" value="" min="0" step="0.01"></div>
   </div>
+  <div class="form-group"><label>ملاحظة الفاتورة</label><input type="text" id="nsNote" placeholder="ملاحظة اختيارية..."></div>
   <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:8px;padding:10px 14px;font-size:1rem;font-weight:700">
     <span>إجمالي الفاتورة:</span>
     <span id="nsTotalDisplay" style="color:var(--accent)">0.00 EGP</span>
@@ -2403,6 +2405,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
     <div class="form-group"><label>الخصم</label><input type="number" id="saleIssueDiscount" min="0" step="0.01" value="0" oninput="refreshSaleIssueTotals()"></div>
     <div class="form-group"><label>المدفوع الآن (للآجل)</label><input type="number" id="saleIssuePaid" min="0" step="0.01" value=""></div>
   </div>
+  <div class="form-group"><label>ملاحظة الفاتورة</label><input type="text" id="saleIssueNote" placeholder="ملاحظة اختيارية..."></div>
   <div class="form-group" style="margin-top:-4px">
     <label style="display:flex;align-items:center;gap:6px;background:rgba(249,168,37,0.12);border:1px solid rgba(249,168,37,0.35);border-radius:8px;padding:8px 10px;font-size:0.78rem;font-weight:700;color:#b26a00;cursor:pointer">
       <input type="checkbox" id="saleIssueAmanatMode" style="width:16px;height:16px"> بيع كأمانات (السماح بالبيع بدون مخزون)
@@ -4269,6 +4272,7 @@ function openPurchaseModal() {
   document.getElementById('purSupplierPhone').value = '';
   document.getElementById('purInvoiceType').value = 'cash';
   document.getElementById('purPaymentMethod').value = 'cash';
+  const purNoteEl = document.getElementById('purNote'); if (purNoteEl) purNoteEl.value = '';
   document.getElementById('purPaymentMethod').disabled = false;
   document.getElementById('purPrice').value = '';
   document.getElementById('purQty').value = '1';
@@ -4468,6 +4472,7 @@ function savePurchase() {
   const supplierPhone = document.getElementById('purSupplierPhone').value.trim();
   const invoiceType = document.getElementById('purInvoiceType').value;
   const paymentMethod = document.getElementById('purPaymentMethod').value;
+  const note = (document.getElementById('purNote')?.value || '').trim();
   const total = purCart.reduce((s, i) => s + i.total, 0);
   const invoiceId = 'PUR-' + Date.now();
   const supplierName = supplierId ? (DB.suppliers.find(s => s.id == supplierId)?.name || '') : '';
@@ -4519,6 +4524,7 @@ function savePurchase() {
     total,
     invoiceType,
     paymentMethod: invoiceType === 'cash' ? paymentMethod : 'ajel',
+    note,
     user: currentUser ? currentUser.username : 'system'
   });
 
@@ -4641,6 +4647,7 @@ function viewPurchaseInvoice(id) {
     <div style="display:flex;justify-content:space-between;font-size:1.1rem;font-weight:700;padding:10px;background:#f5f5f5;border-radius:8px">
       <span>الإجمالي الكلي:</span><span style="color:#0066ff">${formatMoney(inv.total)}</span>
     </div>
+    ${inv.note ? `<div style="margin-top:10px;background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:0.85rem"><strong>ملاحظة:</strong> ${inv.note}</div>` : ''}
     <div style="text-align:center;margin-top:14px;font-size:0.75rem;color:var(--text2)">شكراً لتعاملكم معنا</div>
   </div>`;
 
@@ -4672,6 +4679,7 @@ function editPurchaseInvoice(id) {
   document.getElementById('purSupplierPhone').value = inv.supplierPhone || '';
   document.getElementById('purInvoiceType').value = inv.invoiceType || 'cash';
   document.getElementById('purPaymentMethod').value = inv.paymentMethod || 'cash';
+  const purNoteEl = document.getElementById('purNote'); if (purNoteEl) purNoteEl.value = inv.note || '';
   document.getElementById('purPrice').value = '';
   document.getElementById('purQty').value = '1';
   document.getElementById('purSerials').value = '';
@@ -4698,6 +4706,7 @@ function updatePurchaseInvoice(id) {
   const supplierPhone = document.getElementById('purSupplierPhone').value.trim();
   const invoiceType = document.getElementById('purInvoiceType').value;
   const paymentMethod = document.getElementById('purPaymentMethod').value;
+  const note = (document.getElementById('purNote')?.value || '').trim();
   const newTotal = purCart.reduce((s, i) => s + i.total, 0);
   const oldTotal = inv.total;
   const supplierName = supplierId ? (DB.suppliers.find(s => s.id == supplierId)?.name || '') : '';
@@ -4754,6 +4763,7 @@ function updatePurchaseInvoice(id) {
   inv.supplierPhone = supplierPhone;
   inv.invoiceType = invoiceType;
   inv.paymentMethod = invoiceType === 'cash' ? paymentMethod : 'ajel';
+  inv.note = note;
   inv.items = purCart.map(i => ({ productId: i.productId, name: i.name, qty: i.qty, price: i.price, total: i.total, serials: i.serials }));
   inv.total = newTotal;
   inv.productId = purCart[0].productId;
@@ -4777,10 +4787,10 @@ function updatePurchaseInvoice(id) {
 }
 
 function exportPurchasesCSV() {
-  let csv = 'رقم الفاتورة,التاريخ,المورد,تليفون المورد,المنتج,الكمية,السعر,الإجمالي,النوع,طريقة الدفع,بواسطة\n';
+  let csv = 'رقم الفاتورة,التاريخ,المورد,تليفون المورد,المنتج,الكمية,السعر,الإجمالي,النوع,طريقة الدفع,ملاحظة,بواسطة\n';
   DB.purchaseInvoices.forEach(p => {
     const prod = DB.products.find(x => x.id === p.productId);
-    csv += `${p.id},${new Date(p.date).toLocaleDateString('ar-EG')},${p.supplier || ''},${p.supplierPhone || ''},${prod ? prod.name : ''},${p.qty},${p.price || 0},${p.total || 0},${p.invoiceType},${p.paymentMethod},${p.user || ''}\n`;
+    csv += `${p.id},${new Date(p.date).toLocaleDateString('ar-EG')},${p.supplier || ''},${p.supplierPhone || ''},${prod ? prod.name : ''},${p.qty},${p.price || 0},${p.total || 0},${p.invoiceType},${p.paymentMethod},${(p.note || '').replace(/,/g,' ')},${p.user || ''}\n`;
   });
   
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -5294,6 +5304,7 @@ function openNewSaleModal() {
   document.getElementById('nsQty').value = '1';
   document.getElementById('nsDiscount').value = '0';
   document.getElementById('nsPartialPaid').value = '';
+  const nsNoteEl = document.getElementById('nsNote'); if (nsNoteEl) nsNoteEl.value = '';
   const nsAmanat = document.getElementById('nsAmanatMode'); if (nsAmanat) nsAmanat.checked = false;
   document.getElementById('nsScanInput').value = '';
   updateNsSerialsCount();
@@ -5513,6 +5524,7 @@ function saveNewSaleInvoice() {
   const paymentType = document.getElementById('nsPaymentMethod').value;
   const invoiceType = document.getElementById('nsInvoiceType').value;
   const discount = parseFloat(document.getElementById('nsDiscount').value) || 0;
+  const note = (document.getElementById('nsNote')?.value || '').trim();
   const subtotal = nsCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const total = Math.max(0, subtotal - discount);
   const partialPaidInput = parseFloat(document.getElementById('nsPartialPaid').value) || 0;
@@ -5568,6 +5580,7 @@ function saveNewSaleInvoice() {
     })),
     subtotal,
     discount,
+    note,
     total,
     profit,
     payment: paymentType,
@@ -5606,6 +5619,7 @@ function openSaleIssueModal() {
   document.getElementById('saleIssuePayment').value = document.getElementById('cartPaymentType').value || 'cash';
   document.getElementById('saleIssueDiscount').value = document.getElementById('discountInput').value || '0';
   document.getElementById('saleIssuePaid').value = document.getElementById('salePartialPaid')?.value || '';
+  document.getElementById('saleIssueNote').value = document.getElementById('nsNote')?.value || '';
   document.getElementById('saleIssueSearch').value = '';
   filterSaleIssueCustomers('');
   const currentSel = document.getElementById('cartCustomerSelect').value || '';
@@ -5663,6 +5677,8 @@ function confirmSaleIssueModal() {
   if (sel) document.getElementById('cartCustomerSelect').value = sel;
   const pp = document.getElementById('salePartialPaid');
   if (pp) pp.value = document.getElementById('saleIssuePaid').value || '';
+  const nsNoteEl = document.getElementById('nsNote');
+  if (nsNoteEl) nsNoteEl.value = document.getElementById('saleIssueNote').value || '';
   const amanat = !!document.getElementById('saleIssueAmanatMode')?.checked;
   const posAmanat = document.getElementById('posAmanatMode');
   if (posAmanat) posAmanat.checked = amanat;
@@ -7995,6 +8011,7 @@ function completeSale(forceRun = false) {
   const paymentType = document.getElementById('cartPaymentType').value;
   const invoiceType = document.getElementById('cartInvoiceType').value;
   const discount = parseFloat(document.getElementById('discountInput').value) || 0;
+  const note = (document.getElementById('saleIssueNote')?.value || '').trim();
 
   const subtotal = currentCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const total = subtotal - discount;
@@ -8060,6 +8077,7 @@ function completeSale(forceRun = false) {
     })),
     subtotal,
     discount,
+    note,
     total,
     profit,
     payment: paymentType,
@@ -8242,6 +8260,7 @@ function printInvoice(invoice) {
     <div style="display:flex;justify-content:space-between;font-size:1.1rem;font-weight:700;padding:10px;background:#f5f5f5;border-radius:8px">
       <span>الإجمالي الكلي:</span><span style="color:#0066ff">${formatMoney(invoice.total || 0)}</span>
     </div>
+    ${invoice.note ? `<div style="margin-top:10px;background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:0.85rem"><strong>ملاحظة:</strong> ${invoice.note}</div>` : ''}
     <div style="text-align:center;margin-top:14px;font-size:0.75rem;color:var(--text2)">شكراً لتعاملكم معنا</div>
   </div>`;
   
@@ -8462,9 +8481,9 @@ function editInvoiceFromStatement(invoiceId) {
 }
 
 function exportInvoicesCSV() {
-  let csv = 'رقم الفاتورة,التاريخ,العميل,الإجمالي,الربح,الدفع,النوع,بواسطة\n';
+  let csv = 'رقم الفاتورة,التاريخ,العميل,الإجمالي,الربح,الدفع,النوع,ملاحظة,بواسطة\n';
   DB.saleInvoices.forEach(inv => {
-    csv += `${inv.id},${new Date(inv.date).toLocaleDateString('ar-EG')},${inv.customer || ''},${inv.total || 0},${inv.profit || 0},${inv.payment || ''},${inv.invoiceType || 'cash'},${inv.user || ''}\n`;
+    csv += `${inv.id},${new Date(inv.date).toLocaleDateString('ar-EG')},${inv.customer || ''},${inv.total || 0},${inv.profit || 0},${inv.payment || ''},${inv.invoiceType || 'cash'},${(inv.note || '').replace(/,/g,' ')},${inv.user || ''}\n`;
   });
   
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
