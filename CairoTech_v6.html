@@ -1133,7 +1133,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
       </div>
       <div class="table-container">
         <div class="table-header"><div class="table-title">📋 سجل دفعات الموردين</div></div>
-        <div class="overflow-x"><table class="data-table"><thead><tr><th>التاريخ</th><th>المورد</th><th>المبلغ</th><th>النوع</th><th>البيان</th><th>بواسطة</th></tr></thead><tbody id="supplierPaymentsTbody"></tbody></table></div>
+        <div class="overflow-x"><table class="data-table"><thead><tr><th>التاريخ</th><th>المورد</th><th>المبلغ</th><th>النوع</th><th>البيان</th><th>بواسطة</th><th>إجراءات</th></tr></thead><tbody id="supplierPaymentsTbody"></tbody></table></div>
       </div>
     </div>
 
@@ -1881,6 +1881,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
 <div class="modal-overlay" id="supplierPaymentModal"><div class="modal">
   <div class="modal-title">💰 دفعة مورد<button class="modal-close" onclick="closeModal('supplierPaymentModal')">&times;</button></div>
   <input type="hidden" id="suppPaySupplierId">
+  <input type="hidden" id="suppPayEditId">
   <div class="form-group"><label>اسم المورد</label><input type="text" id="suppPayName" readonly></div>
   <div class="form-group"><label>الرصيد المستحق</label><input type="text" id="suppPayBalance" readonly></div>
   <div class="form-group"><label>نوع العملية</label>
@@ -1899,7 +1900,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
     </select>
   </div>
   <div class="form-group"><label>البيان</label><input type="text" id="suppPayDesc" placeholder="بيان الدفعة"></div>
-  <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('supplierPaymentModal')">إلغاء</button><button class="btn btn-accent" onclick="saveSupplierPayment()">💾 حفظ</button></div>
+  <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('supplierPaymentModal')">إلغاء</button><button class="btn btn-accent" id="suppPaySaveBtn" onclick="saveSupplierPayment()">💾 حفظ</button></div>
 </div></div>
 
 <!-- Purchase Modal -->
@@ -3536,6 +3537,48 @@ function isPurchaseForSupplier(inv, supplier) {
   return !inv.supplierPhone || String(inv.supplierPhone).trim() === String(supplier.phone).trim();
 }
 
+function normalizeTextForMatch(v) {
+  return String(v || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .trim();
+}
+
+function supplierPaymentDedupKey(date, amount, method, note) {
+  const d = new Date(date || 0);
+  const day = Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+  return [
+    day,
+    Number(amount || 0).toFixed(2),
+    String(method || ''),
+    normalizeTextForMatch(note || '')
+  ].join('|');
+}
+
+function getSupplierPaymentTotalsUnique(supplierId) {
+  const entries = [];
+  (DB.supplierPayments || []).filter(sp => sp.supplierId == supplierId && sp.type === 'payment').forEach(sp => {
+    entries.push({ date: sp.date, amount: sp.amount || 0, method: sp.method || '', note: sp.desc || '' });
+  });
+  (DB.asPayments || []).filter(p => p.entityId == supplierId && p.entityType === 'supplier').forEach(p => {
+    entries.push({ date: p.date, amount: p.amount || 0, method: p.method || '', note: p.note || '' });
+  });
+  (DB.vouchers || []).filter(v => v.partyId == supplierId && v.partyType === 'supplier').forEach(v => {
+    entries.push({ date: v.date, amount: v.amount || 0, method: v.method || '', note: v.desc || '' });
+  });
+
+  const seen = new Set();
+  let total = 0;
+  entries.forEach(e => {
+    const key = supplierPaymentDedupKey(e.date, e.amount, e.method, e.note);
+    if (seen.has(key)) return;
+    seen.add(key);
+    total += Number(e.amount || 0);
+  });
+  return total;
+}
+
 function getSupplierOutstanding(supplierId) {
   const s = DB.suppliers.find(x => x.id == supplierId);
   if (!s) return 0;
@@ -3545,25 +3588,13 @@ function getSupplierOutstanding(supplierId) {
     .filter(p => p.invoiceType === 'ajel')
     .reduce((sum, p) => sum + getPurchaseInvoiceDue(p), 0);
 
-  const supplierPayments = DB.supplierPayments
-    .filter(sp => sp.supplierId == s.id && sp.type === 'payment')
-    .reduce((sum, sp) => sum + (sp.amount || 0), 0);
-
-  // Supplier account payments/refunds from AS screen both reduce payable.
-  const asPaid = (DB.asPayments || [])
-    .filter(p => p.entityId == s.id && p.entityType === 'supplier')
-    .reduce((sum, p) => sum + (p.amount || 0), 0);
-
-  // Supplier vouchers (payment/receipt) both reduce payable to supplier.
-  const vouchersNet = (DB.vouchers || [])
-    .filter(v => v.partyId == s.id && v.partyType === 'supplier')
-    .reduce((sum, v) => sum + (v.amount || 0), 0);
+  const paymentsUniqueTotal = getSupplierPaymentTotalsUnique(s.id);
 
   const purchaseReturns = (DB.returns || [])
     .filter(r => DB.purchaseInvoices.find(p => p.id === r.invoiceId && isPurchaseForSupplier(p, s) && p.invoiceType === 'ajel'))
     .reduce((sum, r) => sum + (r.refund || 0), 0);
 
-  return (s.balance || 0) + purchasesTotal - supplierPayments - asPaid - vouchersNet - purchaseReturns;
+  return (s.balance || 0) + purchasesTotal - paymentsUniqueTotal - purchaseReturns;
 }
 
 function getCustomerOutstanding(customerId) {
@@ -5100,8 +5131,12 @@ function renderSuppliers() {
       <td>${p.type === 'payment' ? '💰 تسديد' : '📦 توريد'}</td>
       <td>${p.desc || '-'}</td>
       <td>${p.user || '-'}</td>
+      <td style="display:flex;gap:4px;justify-content:center">
+        <button class="btn btn-sm btn-yellow" onclick="editSupplierPayment('${p.id}')">✏️ تعديل</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteSupplierPayment('${p.id}')">🗑️ حذف</button>
+      </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" style="text-align:center">لا توجد دفعات</td></tr>';
+  }).join('') || '<tr><td colspan="7" style="text-align:center">لا توجد دفعات</td></tr>';
 }
 
 function quickAddSupplierPayment(supplierId) {
@@ -5285,18 +5320,69 @@ function openSupplierPaymentModal(supplierId) {
   const debt = getSupplierOutstanding(s.id);
   
   document.getElementById('suppPaySupplierId').value = supplierId;
+  document.getElementById('suppPayEditId').value = '';
   document.getElementById('suppPayName').value = s.name;
   document.getElementById('suppPayBalance').value = formatMoney(debt);
   document.getElementById('suppPayType').value = 'payment';
   document.getElementById('suppPayAmount').value = '';
   document.getElementById('suppPayMethod').value = 'cash';
   document.getElementById('suppPayDesc').value = '';
+  const saveBtn = document.getElementById('suppPaySaveBtn');
+  if (saveBtn) saveBtn.textContent = '💾 حفظ';
+  const modalTitle = document.querySelector('#supplierPaymentModal .modal-title');
+  if (modalTitle && modalTitle.childNodes && modalTitle.childNodes[0]) modalTitle.childNodes[0].textContent = '💰 دفعة مورد';
   
   openModal('supplierPaymentModal');
 }
 
+function editSupplierPayment(paymentId) {
+  const p = (DB.supplierPayments || []).find(x => String(x.id) === String(paymentId));
+  if (!p) return;
+  const s = DB.suppliers.find(x => x.id === p.supplierId);
+  if (!s) { showToast('المورد غير موجود', 'error'); return; }
+
+  const debt = getSupplierOutstanding(s.id);
+  document.getElementById('suppPaySupplierId').value = p.supplierId;
+  document.getElementById('suppPayEditId').value = p.id;
+  document.getElementById('suppPayName').value = s.name;
+  document.getElementById('suppPayBalance').value = formatMoney(debt);
+  document.getElementById('suppPayType').value = p.type || 'payment';
+  document.getElementById('suppPayAmount').value = p.amount || 0;
+  document.getElementById('suppPayMethod').value = p.method || 'cash';
+  document.getElementById('suppPayDesc').value = p.desc || '';
+  const saveBtn = document.getElementById('suppPaySaveBtn');
+  if (saveBtn) saveBtn.textContent = '💾 تحديث';
+  const modalTitle = document.querySelector('#supplierPaymentModal .modal-title');
+  if (modalTitle && modalTitle.childNodes && modalTitle.childNodes[0]) modalTitle.childNodes[0].textContent = '✏️ تعديل دفعة مورد';
+  openModal('supplierPaymentModal');
+}
+
+function deleteSupplierPayment(paymentId) {
+  const p = (DB.supplierPayments || []).find(x => String(x.id) === String(paymentId));
+  if (!p) return;
+  const s = DB.suppliers.find(x => x.id === p.supplierId);
+  if (!s) { showToast('المورد غير موجود', 'error'); return; }
+  if (!confirm(`حذف هذه الدفعة؟\n${s.name} - ${formatMoney(p.amount)}`)) return;
+
+  // Reverse accounting effect
+  if (p.type === 'payment') {
+    addCashEntry('in', p.amount || 0, p.method || 'cash', `↩️ إلغاء دفعة مورد #${p.id}`);
+  } else {
+    s.balance = (s.balance || 0) - (p.amount || 0);
+  }
+
+  DB.supplierPayments = (DB.supplierPayments || []).filter(x => String(x.id) !== String(paymentId));
+  logActivity('حذف دفعة مورد', `${s.name} - ${formatMoney(p.amount || 0)}`);
+  saveDB();
+  runFinanceStockRecheck('حذف دفعة مورد');
+  renderSuppliers();
+  renderPurchases();
+  showToast('تم حذف الدفعة');
+}
+
 function saveSupplierPayment() {
   const supplierId = parseInt(document.getElementById('suppPaySupplierId').value);
+  const editId = document.getElementById('suppPayEditId').value;
   const type = document.getElementById('suppPayType').value;
   const amount = parseFloat(document.getElementById('suppPayAmount').value) || 0;
   const method = document.getElementById('suppPayMethod').value;
@@ -5307,6 +5393,17 @@ function saveSupplierPayment() {
   const s = DB.suppliers.find(x => x.id === supplierId);
   if (!s) return;
   const desc = descInput || (type === 'payment' ? `دفعة للمورد (${getPaymentLabel(method)})` : `توريد على حساب المورد (${getPaymentLabel(method)})`);
+
+  if (editId) {
+    const old = (DB.supplierPayments || []).find(x => String(x.id) === String(editId));
+    if (!old) { showToast('القيد المراد تعديله غير موجود', 'error'); return; }
+    // Reverse old effect first
+    if (old.type === 'payment') {
+      addCashEntry('in', old.amount || 0, old.method || 'cash', `↩️ عكس دفعة مورد - تعديل #${editId}`);
+    } else {
+      s.balance = (s.balance || 0) - (old.amount || 0);
+    }
+  }
   
   // Only cash/in-kind supply (type='supply') modifies opening balance
   // Payment type is tracked via supplierPayments - don't double-count in s.balance
@@ -5318,25 +5415,43 @@ function saveSupplierPayment() {
   }
   
   // Log payment
-  DB.supplierPayments.unshift({
-    id: Date.now(),
-    date: new Date().toISOString(),
-    supplierId,
-    amount,
-    type,
-    method,
-    desc,
-    user: currentUser ? currentUser.username : 'system'
-  });
+  if (editId) {
+    const old = (DB.supplierPayments || []).find(x => String(x.id) === String(editId));
+    if (old) {
+      old.supplierId = supplierId;
+      old.amount = amount;
+      old.type = type;
+      old.method = method;
+      old.desc = desc;
+      old.editedAt = new Date().toISOString();
+      old.editedBy = currentUser ? currentUser.username : 'system';
+    }
+  } else {
+    DB.supplierPayments.unshift({
+      id: Date.now(),
+      date: new Date().toISOString(),
+      supplierId,
+      amount,
+      type,
+      method,
+      desc,
+      user: currentUser ? currentUser.username : 'system'
+    });
+  }
   
-  logActivity(type === 'payment' ? 'دفعة مورد' : 'توريد مورد', `${s.name} - ${formatMoney(amount)}`);
+  logActivity(editId ? 'تعديل دفعة مورد' : (type === 'payment' ? 'دفعة مورد' : 'توريد مورد'), `${s.name} - ${formatMoney(amount)}`);
   
   saveDB();
   runFinanceStockRecheck('دفعة مورد');
   closeModal('supplierPaymentModal');
   renderSuppliers();
   renderPurchases();
-  showToast(type === 'payment' ? 'تم تسجيل الدفعة' : 'تم تسجيل التوريد');
+  showToast(editId ? 'تم تحديث الدفعة' : (type === 'payment' ? 'تم تسجيل الدفعة' : 'تم تسجيل التوريد'));
+  document.getElementById('suppPayEditId').value = '';
+  const saveBtn = document.getElementById('suppPaySaveBtn');
+  if (saveBtn) saveBtn.textContent = '💾 حفظ';
+  const modalTitle = document.querySelector('#supplierPaymentModal .modal-title');
+  if (modalTitle && modalTitle.childNodes && modalTitle.childNodes[0]) modalTitle.childNodes[0].textContent = '💰 دفعة مورد';
 }
 
 function deleteSupplier(idx) {
@@ -9539,6 +9654,7 @@ function deleteUnifiedOffset(offsetId) {
 function renderUnifiedASCard(customer, supplier) {
   // Build combined transactions for a person who is both customer and supplier
   let transactions = [];
+  const supplierPaySeen = new Set();
 
   // Opening balances
   if ((customer.balance || 0) > 0) {
@@ -9614,6 +9730,9 @@ function renderUnifiedASCard(customer, supplier) {
   (DB.asPayments || []).filter(p => p.entityId == supplier.id && p.entityType === 'supplier').forEach(p => {
     const noteText = (p.note || '').trim();
     const fallback = p.direction === 'pay' ? `استرداد من المورد (${getPaymentLabel(p.method)})` : `دفعة للمورد (${getPaymentLabel(p.method)})`;
+    const key = supplierPaymentDedupKey(p.date, p.amount || 0, p.method || '', noteText || fallback);
+    if (supplierPaySeen.has(key)) return;
+    supplierPaySeen.add(key);
     transactions.push({
       date: p.date,
       desc: `💳 دفعة مورد — ${noteText || fallback}`,
@@ -9627,14 +9746,24 @@ function renderUnifiedASCard(customer, supplier) {
   // Payments (as supplier)
   DB.supplierPayments.filter(sp => sp.supplierId == supplier.id && sp.type === 'payment').forEach(sp => {
     const descText = (sp.desc || '').trim();
+    const fallback = `دفعة للمورد (${getPaymentLabel(sp.method)})`;
+    const key = supplierPaymentDedupKey(sp.date, sp.amount || 0, sp.method || '', descText || fallback);
+    if (supplierPaySeen.has(key)) return;
+    supplierPaySeen.add(key);
     transactions.push({
       date: sp.date,
-      desc: `💰 دفعة مورد — ${descText || `دفعة للمورد (${getPaymentLabel(sp.method)})`}`,
+      desc: `💰 دفعة مورد — ${descText || fallback}`,
       saleDebit: 0, saleCredit: 0,
       purDebit: 0, purCredit: sp.amount,
       badge: '<span class="badge badge-green">دفعة</span>',
       bg: 'rgba(0,168,84,0.05)'
     });
+  });
+
+  (DB.vouchers || []).filter(v => v.partyId == supplier.id && v.partyType === 'supplier').forEach(v => {
+    const voucherNote = (v.desc || '').trim() || `سند ${v.type === 'payment' ? 'صرف' : 'قبض'}`;
+    const key = supplierPaymentDedupKey(v.date, v.amount || 0, v.method || '', voucherNote);
+    supplierPaySeen.add(key);
   });
 
   // السندات
@@ -9860,23 +9989,24 @@ function renderASCard(entity, type) {
         type: 'opening'
       });
     }
-    const purchases = DB.purchaseInvoices.filter(p => p.supplierId == entity.id || p.supplier === entity.name);
+    const purchases = DB.purchaseInvoices.filter(p => isPurchaseForSupplier(p, entity));
     purchases.forEach(p => {
       const itemsSummary = p.items && p.items.length > 0
         ? p.items.map(i => `${i.name} ×${i.qty}`).join('، ')
         : (DB.products.find(prod => prod.id === p.productId)?.name || '-');
-      transactions.push({ date: p.date, desc: `🛍️ فاتورة شراء #${p.id} — ${itemsSummary}`, debit: p.invoiceType === 'ajel' ? (p.total || 0) : 0, credit: 0, type: 'invoice' });
+      transactions.push({ date: p.date, desc: `🛍️ فاتورة شراء #${p.id} — ${itemsSummary}`, debit: p.invoiceType === 'ajel' ? getPurchaseInvoiceDue(p) : 0, credit: 0, type: 'invoice' });
       transactions[transactions.length - 1].invoiceId = p.id;
     });
     DB.supplierPayments.filter(sp => sp.supplierId == entity.id && sp.type === 'payment').forEach(sp => {
-      transactions.push({ date: sp.date, desc: sp.desc || 'دفعة للمورد', debit: 0, credit: sp.amount, type: 'payment' });
+      transactions.push({ date: sp.date, desc: sp.desc || `دفعة للمورد (${getPaymentLabel(sp.method)})`, debit: 0, credit: sp.amount, type: 'payment' });
     });
     DB.asPayments = DB.asPayments || [];
     DB.asPayments.filter(p => p.entityId == entity.id && p.entityType === 'supplier').forEach(p => {
-      transactions.push({ date: p.date, desc: p.note || 'دفعة', debit: p.direction === 'pay' ? (p.amount || 0) : 0, credit: p.direction === 'receive' ? (p.amount || 0) : 0, type: 'payment', paymentId: p.id });
+      const noteText = (p.note || '').trim() || (p.direction === 'pay' ? `استرداد من المورد (${getPaymentLabel(p.method)})` : `دفعة للمورد (${getPaymentLabel(p.method)})`);
+      transactions.push({ date: p.date, desc: noteText, debit: 0, credit: (p.amount || 0), type: 'payment', paymentId: p.id });
     });
     (DB.vouchers || []).filter(v => v.partyId == entity.id && v.partyType === 'supplier').forEach(v => {
-      transactions.push({ date: v.date, desc: `سند ${v.type === 'payment' ? 'صرف' : 'قبض'} #${v.id} — ${v.desc}`, debit: v.type === 'receipt' ? v.amount : 0, credit: v.type === 'payment' ? v.amount : 0, type: 'payment' });
+      transactions.push({ date: v.date, desc: `سند ${v.type === 'payment' ? 'صرف' : 'قبض'} #${v.id} — ${v.desc}`, debit: 0, credit: (v.amount || 0), type: 'payment' });
     });
     balance = getSupplierOutstanding(entity.id);
 
