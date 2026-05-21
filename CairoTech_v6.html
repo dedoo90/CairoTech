@@ -1770,7 +1770,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
         <a href="https://www.facebook.com/DigiTronicsPlus" target="_blank" class="facebook" title="فيسبوك">📘</a>
       </div>
       <div class="footer-copyright">
-        <strong>CairoTech</strong> - 174 شارع التحرير، باب اللوق، القاهرة<br>
+        <strong>CairoTech</strong> - 3 ش بستان ابن قريش، باب اللوق، السوق القديم<br>
         📞 +20 10 61057355 | 📧 <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="f899949999c9c8c8c8c8c8c8999491b89f95999194d69b9795">[email&#160;protected]</a><br><br>
         <strong>حقوق الملكية:</strong> هذا التطبيق مملوك لكيان <strong>DigiTronics Plus</strong><br>
         جميع الحقوق محفوظة © 2025
@@ -5300,12 +5300,13 @@ function saveSupplierPayment() {
   const type = document.getElementById('suppPayType').value;
   const amount = parseFloat(document.getElementById('suppPayAmount').value) || 0;
   const method = document.getElementById('suppPayMethod').value;
-  const desc = document.getElementById('suppPayDesc').value.trim();
+  const descInput = document.getElementById('suppPayDesc').value.trim();
   
   if (!amount) { showToast('أدخل المبلغ', 'error'); return; }
   
   const s = DB.suppliers.find(x => x.id === supplierId);
   if (!s) return;
+  const desc = descInput || (type === 'payment' ? `دفعة للمورد (${getPaymentLabel(method)})` : `توريد على حساب المورد (${getPaymentLabel(method)})`);
   
   // Only cash/in-kind supply (type='supply') modifies opening balance
   // Payment type is tracked via supplierPayments - don't double-count in s.balance
@@ -9596,9 +9597,11 @@ function renderUnifiedASCard(customer, supplier) {
 
   // Payments (as customer)
   (DB.asPayments || []).filter(p => p.entityId == customer.id && p.entityType === 'customer').forEach(p => {
+    const noteText = (p.note || '').trim();
+    const fallback = p.direction === 'pay' ? `استرداد للعميل (${getPaymentLabel(p.method)})` : `سداد عميل (${getPaymentLabel(p.method)})`;
     transactions.push({
       date: p.date,
-      desc: `💳 دفعة عميل — ${p.note || ''}`,
+      desc: `💳 دفعة عميل — ${noteText || fallback}`,
       saleDebit: p.direction === 'receive' ? p.amount : 0,
       saleCredit: p.direction === 'pay' ? p.amount : 0,
       purDebit: 0, purCredit: 0,
@@ -9607,11 +9610,26 @@ function renderUnifiedASCard(customer, supplier) {
     });
   });
 
+  // Payments (as supplier) from account-statement payments
+  (DB.asPayments || []).filter(p => p.entityId == supplier.id && p.entityType === 'supplier').forEach(p => {
+    const noteText = (p.note || '').trim();
+    const fallback = p.direction === 'pay' ? `استرداد من المورد (${getPaymentLabel(p.method)})` : `دفعة للمورد (${getPaymentLabel(p.method)})`;
+    transactions.push({
+      date: p.date,
+      desc: `💳 دفعة مورد — ${noteText || fallback}`,
+      saleDebit: 0, saleCredit: 0,
+      purDebit: 0, purCredit: p.amount || 0,
+      badge: '<span class="badge badge-green">دفعة</span>',
+      bg: 'rgba(0,168,84,0.05)'
+    });
+  });
+
   // Payments (as supplier)
   DB.supplierPayments.filter(sp => sp.supplierId == supplier.id && sp.type === 'payment').forEach(sp => {
+    const descText = (sp.desc || '').trim();
     transactions.push({
       date: sp.date,
-      desc: `💰 دفعة مورد — ${sp.desc || ''}`,
+      desc: `💰 دفعة مورد — ${descText || `دفعة للمورد (${getPaymentLabel(sp.method)})`}`,
       saleDebit: 0, saleCredit: 0,
       purDebit: 0, purCredit: sp.amount,
       badge: '<span class="badge badge-green">دفعة</span>',
@@ -10131,7 +10149,7 @@ function printASCard(entityId, entityType, entityName) {
     + '</head><body>'
     + '<div style="text-align:center;margin-bottom:12px;border-bottom:2px solid #0066ff;padding-bottom:10px">'
     + '<div style="font-size:1.5rem;font-weight:900;color:#0066ff">CairoTech</div>'
-    + '<div style="font-size:0.78rem;color:#666">174 شارع التحرير، باب اللوق، القاهرة | 01061057355</div>'
+    + '<div style="font-size:0.78rem;color:#666">3 ش بستان ابن قريش، باب اللوق، السوق القديم | 01061057355</div>'
     + '<div style="font-size:1rem;font-weight:700;margin-top:6px">كشف حساب ' + typeLabel + ': ' + entityName + '</div>'
     + '<div style="font-size:0.72rem;color:#888">تاريخ الطباعة: ' + new Date().toLocaleString('ar-EG') + '</div>'
     + '</div>'
@@ -10410,7 +10428,7 @@ function printVoucher(voucher) {
       <!-- Header -->
       <div style="text-align:center;border-bottom:3px solid ${typeColor};padding-bottom:14px;margin-bottom:16px">
         <div style="font-size:1.6rem;font-weight:900;color:#0066ff">⚡ CairoTech</div>
-        <div style="font-size:0.8rem;color:#666;margin-top:2px">174 شارع التحرير، باب اللوق، القاهرة | 📞 +20 10 61057355</div>
+        <div style="font-size:0.8rem;color:#666;margin-top:2px">3 ش بستان ابن قريش، باب اللوق، السوق القديم | 📞 +20 10 61057355</div>
         <div style="margin-top:10px;background:${typeColor};color:#fff;display:inline-block;padding:6px 28px;border-radius:20px;font-size:1rem;font-weight:900;letter-spacing:1px">
           ${isReceipt ? '📥' : '📤'} ${typeAr}
         </div>
@@ -11268,7 +11286,7 @@ function exportPDF(title, htmlContent, filename) {
     + '.fn{text-align:center;font-size:0.72rem;color:#999;margin-top:20px;padding-top:10px;border-top:1px dashed #ddd;}'
     + '@media print{@page{size:A4;margin:1.5cm;}.no-print{display:none!important;}}'
     + '</style></head><body>'
-    + '<div class="ph"><div class="pl">CairoTech</div><div class="pa">174 شارع التحرير، باب اللوق، القاهرة | 01061057355</div>'
+    + '<div class="ph"><div class="pl">CairoTech</div><div class="pa">3 ش بستان ابن قريش، باب اللوق، السوق القديم | 01061057355</div>'
     + '<div class="pt">' + title + '</div></div>'
     + htmlContent
     + '<div class="fn">تم الإنشاء: ' + dateStr + ' • CairoTech</div>'
@@ -11370,7 +11388,7 @@ function buildPrintableDiv(title, htmlContent) {
   div.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:794px;background:#fff;direction:rtl;font-family:Cairo,Arial,sans-serif;color:#000;padding:28px;box-sizing:border-box;';
   div.innerHTML = '<div style="text-align:center;border-bottom:3px solid #0066ff;padding-bottom:14px;margin-bottom:18px;">'
     + '<div style="font-size:1.6rem;font-weight:900;color:#0066ff">CairoTech</div>'
-    + '<div style="font-size:0.75rem;color:#666;margin-top:4px">174 شارع التحرير، باب اللوق، القاهرة | 01061057355</div>'
+    + '<div style="font-size:0.75rem;color:#666;margin-top:4px">3 ش بستان ابن قريش، باب اللوق، السوق القديم | 01061057355</div>'
     + '<div style="font-size:1rem;font-weight:700;margin-top:10px;background:#0066ff;color:#fff;display:inline-block;padding:6px 24px;border-radius:20px;">' + title + '</div>'
     + '</div>'
     + htmlContent
