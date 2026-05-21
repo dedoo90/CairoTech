@@ -3549,19 +3549,21 @@ function getSupplierOutstanding(supplierId) {
     .filter(sp => sp.supplierId == s.id && sp.type === 'payment')
     .reduce((sum, sp) => sum + (sp.amount || 0), 0);
 
+  // Supplier account payments/refunds from AS screen both reduce payable.
   const asPaid = (DB.asPayments || [])
     .filter(p => p.entityId == s.id && p.entityType === 'supplier')
-    .reduce((sum, p) => sum + (p.direction === 'receive' ? (p.amount || 0) : -(p.amount || 0)), 0);
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
 
+  // Supplier vouchers (payment/receipt) both reduce payable to supplier.
   const vouchersNet = (DB.vouchers || [])
     .filter(v => v.partyId == s.id && v.partyType === 'supplier')
-    .reduce((sum, v) => sum + (v.type === 'payment' ? -(v.amount || 0) : (v.amount || 0)), 0);
+    .reduce((sum, v) => sum + (v.amount || 0), 0);
 
   const purchaseReturns = (DB.returns || [])
     .filter(r => DB.purchaseInvoices.find(p => p.id === r.invoiceId && isPurchaseForSupplier(p, s) && p.invoiceType === 'ajel'))
     .reduce((sum, r) => sum + (r.refund || 0), 0);
 
-  return (s.balance || 0) + purchasesTotal - supplierPayments - asPaid + vouchersNet - purchaseReturns;
+  return (s.balance || 0) + purchasesTotal - supplierPayments - asPaid - vouchersNet - purchaseReturns;
 }
 
 function getCustomerOutstanding(customerId) {
@@ -3611,12 +3613,17 @@ function getProductStock(productId) {
   const product = DB.products.find(p => p.id === productId);
   if (!product) return 0;
   if (product.hasSerial === false) return product.stockQty || 0;
-  const serialAvailable = getAvailableSerials(productId).length;
-  // Fallback for legacy purchases recorded as quantity without serial rows.
-  return Math.max(serialAvailable, Number(product.stockQty || 0));
+  const productSerials = (DB.serials || []).filter(s => s.productId === productId);
+  const serialAvailable = productSerials.filter(s => s.status === 'available').length;
+  // If this serial product has serial rows, trust serial rows only.
+  if (productSerials.length > 0) return serialAvailable;
+  // Legacy fallback: very old data may have quantity without serial rows.
+  return Number(product.stockQty || 0);
 }
 
-function syncSerialStockQty() {
+function syncSerialStockQty(options = {}) {
+  const silent = !!options.silent;
+  const skipRender = !!options.skipRender;
   const serialProducts = (DB.products || []).filter(p => p.hasSerial !== false);
   let changed = 0;
   serialProducts.forEach(p => {
@@ -3627,11 +3634,16 @@ function syncSerialStockQty() {
     }
   });
 
-  saveDB();
-  renderProductsTable(document.querySelector('#page-products .search-input')?.value || '');
-  if (currentPage === 'stockmovement') renderStockMovement();
-  showToast(changed ? `تم تصحيح ${changed} منتج بسيريال` : 'لا توجد فروقات تحتاج تصحيح');
-  logActivity('تصحيح مخزون السيريال', `تمت مزامنة ${changed} منتج`);
+  if (changed > 0) saveDB();
+  if (!skipRender) {
+    renderProductsTable(document.querySelector('#page-products .search-input')?.value || '');
+    if (currentPage === 'stockmovement') renderStockMovement();
+  }
+  if (!silent) {
+    showToast(changed ? `تم تصحيح ${changed} منتج بسيريال` : 'لا توجد فروقات تحتاج تصحيح');
+    logActivity('تصحيح مخزون السيريال', `تمت مزامنة ${changed} منتج`);
+  }
+  return changed;
 }
 
 function syncSerialStockForProduct(productId) {
@@ -5119,7 +5131,7 @@ function viewSupplierStatement(supplierId) {
   let transactions = [];
 
   // فواتير الشراء
-  DB.purchaseInvoices.filter(p => p.supplierId == s.id || p.supplier === s.name).forEach(p => {
+  DB.purchaseInvoices.filter(p => isPurchaseForSupplier(p, s)).forEach(p => {
     const itemsSummary = p.items && p.items.length > 0
       ? p.items.map(i => `${i.name} ×${i.qty}`).join('، ')
       : (DB.products.find(prod => prod.id === p.productId)?.name || '-');
@@ -5127,7 +5139,7 @@ function viewSupplierStatement(supplierId) {
       date: p.date,
       desc: `📦 فاتورة شراء #${p.id}`,
       detail: itemsSummary,
-      debit: p.invoiceType === 'ajel' ? (p.total || 0) : 0,
+      debit: p.invoiceType === 'ajel' ? getPurchaseInvoiceDue(p) : 0,
       credit: 0,
       badge: `<span class="badge badge-blue">شراء</span>`,
       bg: 'rgba(0,102,255,0.05)'
@@ -5149,13 +5161,12 @@ function viewSupplierStatement(supplierId) {
 
   // asPayments
   (DB.asPayments || []).filter(p => p.entityId == s.id && p.entityType === 'supplier').forEach(p => {
-    const isPay = p.direction === 'receive';
     transactions.push({
       date: p.date,
-      desc: `💳 ${p.note || 'دفعة'}`,
+      desc: `💳 ${p.note || (p.direction === 'pay' ? 'استرداد من المورد' : 'دفعة للمورد')}`,
       detail: getPaymentLabel(p.method),
-      debit: isPay ? 0 : p.amount,
-      credit: isPay ? p.amount : 0,
+      debit: 0,
+      credit: p.amount || 0,
       badge: `<span class="badge badge-green">دفعة</span>`,
       bg: 'rgba(0,168,84,0.05)'
     });
@@ -5163,15 +5174,14 @@ function viewSupplierStatement(supplierId) {
 
   // السندات
   (DB.vouchers || []).filter(v => v.partyId == s.id && v.partyType === 'supplier').forEach(v => {
-    const isPay = v.type === 'payment';
     transactions.push({
       date: v.date,
-      desc: `🧾 سند ${isPay ? 'صرف' : 'قبض'} #${v.id}`,
+      desc: `🧾 سند ${v.type === 'payment' ? 'صرف' : 'قبض'} #${v.id}`,
       detail: v.desc,
-      debit: isPay ? 0 : v.amount,
-      credit: isPay ? v.amount : 0,
-      badge: isPay ? `<span class="badge badge-green">سند صرف</span>` : `<span class="badge badge-red">سند قبض</span>`,
-      bg: isPay ? 'rgba(0,168,84,0.05)' : 'rgba(229,57,53,0.05)'
+      debit: 0,
+      credit: v.amount || 0,
+      badge: `<span class="badge badge-green">${v.type === 'payment' ? 'سند صرف' : 'سند قبض'}</span>`,
+      bg: 'rgba(0,168,84,0.05)'
     });
   });
 
@@ -9569,7 +9579,7 @@ function renderUnifiedASCard(customer, supplier) {
   });
 
   // فواتير الشراء (as supplier)
-  DB.purchaseInvoices.filter(p => p.supplierId == supplier.id || p.supplier === supplier.name).forEach(p => {
+  DB.purchaseInvoices.filter(p => isPurchaseForSupplier(p, supplier)).forEach(p => {
     const itemsSummary = p.items && p.items.length > 0
       ? p.items.map(i => `${i.name} ×${i.qty}`).join('، ')
       : DB.products.find(prod => prod.id === p.productId)?.name || '-';
@@ -9578,7 +9588,7 @@ function renderUnifiedASCard(customer, supplier) {
       desc: `📥 فاتورة شراء #${p.id} — ${itemsSummary}`,
       invoiceId: p.id,
       saleDebit: 0, saleCredit: 0,
-      purDebit: p.invoiceType === 'ajel' ? (p.total || 0) : 0, purCredit: 0,
+      purDebit: p.invoiceType === 'ajel' ? getPurchaseInvoiceDue(p) : 0, purCredit: 0,
       badge: '<span class="badge badge-yellow">شراء</span>',
       bg: 'rgba(249,168,37,0.05)'
     });
@@ -10608,6 +10618,7 @@ function initApp() {
   if (warDate) warDate.valueAsDate = new Date();
 
   // Strict cross-module balance audit on real user data
+  syncSerialStockQty({ silent: true, skipRender: true });
   runStrictBalanceAudit();
   ensureSaleIssueButtonBinding();
 }
