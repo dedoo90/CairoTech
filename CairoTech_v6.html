@@ -2736,6 +2736,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
     <button class="btn btn-accent" onclick="window.print()">🖨️ طباعة</button>
     <button class="btn btn-green" onclick="shareInvoiceWhatsApp()" id="waShareInvBtn">📱 واتساب</button>
     <button class="btn btn-yellow" onclick="if(_lastInvoiceForShare)exportInvoiceImg(_lastInvoiceForShare.id)">📤 تصدير</button>
+    <button class="btn btn-orange" id="createPurFromSaleBtn" onclick="createPurchaseFromCurrentSaleInvoice()">↩️ إنشاء شراء</button>
   </div>
 </div></div>
 
@@ -3531,10 +3532,16 @@ function getPurchaseInvoiceDue(inv) {
 function isPurchaseForSupplier(inv, supplier) {
   if (!inv || !supplier) return false;
   if (inv.supplierId != null && inv.supplierId !== '') return String(inv.supplierId) === String(supplier.id);
-  if ((inv.supplier || '').trim() !== (supplier.name || '').trim()) return false;
-  // Legacy fallback for old invoices without supplierId.
-  if (!supplier.phone) return true;
-  return !inv.supplierPhone || String(inv.supplierPhone).trim() === String(supplier.phone).trim();
+  const invName = normalizeArabicNameForMatch(inv.supplier || '');
+  const supName = normalizeArabicNameForMatch(supplier.name || '');
+  const nameMatched = invName && supName && invName === supName;
+
+  const invPhones = [normalizePhoneForMatch(inv.supplierPhone), normalizePhoneForMatch(inv.supplierPhone2)].filter(Boolean);
+  const supPhones = [normalizePhoneForMatch(supplier.phone), normalizePhoneForMatch(supplier.phone2)].filter(Boolean);
+  const phoneMatched = invPhones.length > 0 && supPhones.length > 0 && invPhones.some(p => supPhones.includes(p));
+
+  // Legacy fallback for old invoices without supplierId: accept name or phone match.
+  return !!(nameMatched || phoneMatched);
 }
 
 function normalizeTextForMatch(v) {
@@ -3543,6 +3550,20 @@ function normalizeTextForMatch(v) {
     .replace(/\s+/g, ' ')
     .replace(/[^\p{L}\p{N}\s]/gu, '')
     .trim();
+}
+
+function normalizePhoneForMatch(v) {
+  return String(v || '')
+    .replace(/\s+/g, '')
+    .replace(/^\+?20/, '0')
+    .trim();
+}
+
+function normalizeArabicNameForMatch(v) {
+  return normalizeTextForMatch(v)
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه');
 }
 
 function supplierPaymentDedupKey(date, amount, method, note) {
@@ -4863,6 +4884,8 @@ function viewPurchaseInvoice(id) {
   </div>`;
 
   document.getElementById('invoicePrintContent').innerHTML = html;
+  const createBtn = document.getElementById('createPurFromSaleBtn');
+  if (createBtn) createBtn.style.display = 'none';
   openModal('invoicePrintModal');
 }
 
@@ -8706,6 +8729,8 @@ function printInvoice(invoice) {
   </div>`;
   
   document.getElementById('invoicePrintContent').innerHTML = html;
+  const createBtn = document.getElementById('createPurFromSaleBtn');
+  if (createBtn) createBtn.style.display = '';
   openModal('invoicePrintModal');
 }
 
@@ -8902,6 +8927,49 @@ function viewInvoice(id) {
   const inv = DB.saleInvoices.find(i => i.id === id);
   if (!inv) return;
   printInvoice(inv);
+}
+
+function createPurchaseFromCurrentSaleInvoice() {
+  const saleInv = _lastInvoiceForShare;
+  if (!saleInv || !saleInv.id || !String(saleInv.id).startsWith('INV-')) {
+    showToast('افتح فاتورة بيع أولاً', 'error');
+    return;
+  }
+  const items = Array.isArray(saleInv.items) ? saleInv.items : [];
+  if (!items.length) {
+    showToast('لا توجد أصناف داخل الفاتورة', 'error');
+    return;
+  }
+
+  const mapped = items.map(i => {
+    const prod = DB.products.find(p => p.id === i.productId) || DB.products.find(p => (p.name || '').trim() === (i.name || '').trim());
+    const hasSerial = Array.isArray(i.serials) && i.serials.length > 0;
+    const noSerial = prod ? (prod.hasSerial === false) : !hasSerial;
+    const qty = Number(i.qty || (hasSerial ? i.serials.length : 1)) || 1;
+    const baseBuy = Number(i.buyPrice != null ? i.buyPrice : (prod ? (prod.buyPrice || 0) : 0));
+    const price = baseBuy > 0 ? baseBuy : Number(i.price || 0);
+    return {
+      productId: prod ? prod.id : i.productId,
+      name: i.name || (prod ? prod.name : '-'),
+      price,
+      qty,
+      serials: noSerial ? [] : (Array.isArray(i.serials) ? i.serials.slice() : []),
+      total: price * qty,
+      noSerial
+    };
+  });
+
+  closeModal('invoicePrintModal');
+  openPurchaseModal();
+  purCart = mapped;
+  const noteEl = document.getElementById('purNote');
+  if (noteEl) noteEl.value = `إنشاء من فاتورة بيع ${saleInv.id} - ${saleInv.customer || ''}`;
+  const invTypeEl = document.getElementById('purInvoiceType');
+  if (invTypeEl) invTypeEl.value = 'ajel';
+  const payEl = document.getElementById('purPaymentMethod');
+  if (payEl) { payEl.value = 'cash'; payEl.disabled = true; }
+  renderPurCart();
+  showToast(`تم تجهيز فاتورة شراء من ${saleInv.id}`);
 }
 
 function reprintInvoice(id) {
