@@ -1032,6 +1032,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
         <div class="page-title">🧾 أرشيف الفواتير</div>
         <div class="table-actions">
           <input class="search-input" type="text" placeholder="بحث..." oninput="renderInvoices(this.value)">
+          <button class="btn btn-accent btn-sm" onclick="openNewSaleModal()">➕ New invoice</button>
           <button class="btn btn-outline btn-sm" onclick="exportInvoicesCSV()">📥 CSV</button>
         </div>
       </div>
@@ -1072,6 +1073,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
         <div class="page-title">📦 المنتجات</div>
         <div class="table-actions">
           <input class="search-input" type="text" placeholder="بحث..." oninput="renderProductsTable(this.value)">
+          <button class="btn btn-outline btn-sm" onclick="syncSerialStockQty()">🛠️ تصحيح مخزون السيريال</button>
           <button class="btn btn-accent btn-sm" onclick="openProductModal()">➕ إضافة</button>
         </div>
       </div>
@@ -1268,13 +1270,32 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
           <div class="cash-card-value" id="treas-fawry" style="color:var(--yellow)">0 EGP</div>
         </div>
       </div>
+      <div class="cash-card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div>
+            <div class="cash-card-title">📊 تقرير الفرق اليومي</div>
+            <div class="cash-card-sub" id="cashDailyDiffDate">-</div>
+          </div>
+          <div style="display:flex;gap:18px;flex-wrap:wrap">
+            <div>وارد: <b id="cashDailyIn" style="color:var(--green)">0</b></div>
+            <div>صادر: <b id="cashDailyOut" style="color:var(--red)">0</b></div>
+            <div>الفرق: <b id="cashDailyNet">0</b></div>
+          </div>
+        </div>
+        <div id="cashDuplicateAlert" class="cash-card-sub" style="margin-top:8px">لا توجد تنبيهات تكرار حالياً</div>
+      </div>
       <div class="table-container">
         <div class="table-header">
           <div class="table-title">📒 حركات الخزنة</div>
           <div class="table-actions">
             <input class="search-input" type="text" placeholder="بحث..." oninput="renderCashFlow()" id="cashSearchFilter">
             <input class="search-input" type="date" id="cashDateFilter" onchange="renderCashFlow()" style="width:150px">
-            <button class="btn btn-outline btn-sm" onclick="document.getElementById('cashDateFilter').value='';document.getElementById('cashSearchFilter').value='';renderCashFlow()">🔄 كل الحركات</button>
+            <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem">
+              <input type="checkbox" id="cashReverseOnlyFilter" onchange="renderCashFlow()">
+              عكس/إلغاء فقط
+            </label>
+            <button class="btn btn-outline btn-sm" onclick="exportCashFlowCSV()">📥 تصدير CSV</button>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('cashDateFilter').value='';document.getElementById('cashSearchFilter').value='';document.getElementById('cashReverseOnlyFilter').checked=false;renderCashFlow()">🔄 كل الحركات</button>
           </div>
         </div>
         <div class="overflow-x"><table class="data-table"><thead><tr><th>#</th><th>التاريخ</th><th>النوع</th><th>المصدر</th><th>طريقة الدفع</th><th>وارد ↑</th><th>صادر ↓</th><th>الرصيد</th><th>البيان</th></tr></thead><tbody id="cashFlowTbody"></tbody></table></div>
@@ -3499,14 +3520,30 @@ function getSaleInvoiceDue(inv) {
   return Math.max(0, (Number(inv.total) || 0) - paid);
 }
 
+function getPurchaseInvoiceDue(inv) {
+  if (!inv || inv.invoiceType !== 'ajel') return 0;
+  if (inv.remainingAmount != null) return Math.max(0, Number(inv.remainingAmount) || 0);
+  const paid = Number(inv.paidAmount || 0);
+  return Math.max(0, (Number(inv.total) || 0) - paid);
+}
+
+function isPurchaseForSupplier(inv, supplier) {
+  if (!inv || !supplier) return false;
+  if (inv.supplierId != null && inv.supplierId !== '') return String(inv.supplierId) === String(supplier.id);
+  if ((inv.supplier || '').trim() !== (supplier.name || '').trim()) return false;
+  // Legacy fallback for old invoices without supplierId.
+  if (!supplier.phone) return true;
+  return !inv.supplierPhone || String(inv.supplierPhone).trim() === String(supplier.phone).trim();
+}
+
 function getSupplierOutstanding(supplierId) {
   const s = DB.suppliers.find(x => x.id == supplierId);
   if (!s) return 0;
 
   const purchasesTotal = DB.purchaseInvoices
-    .filter(p => p.supplierId == s.id || p.supplier === s.name)
+    .filter(p => isPurchaseForSupplier(p, s))
     .filter(p => p.invoiceType === 'ajel')
-    .reduce((sum, p) => sum + (p.total || 0), 0);
+    .reduce((sum, p) => sum + getPurchaseInvoiceDue(p), 0);
 
   const supplierPayments = DB.supplierPayments
     .filter(sp => sp.supplierId == s.id && sp.type === 'payment')
@@ -3521,7 +3558,7 @@ function getSupplierOutstanding(supplierId) {
     .reduce((sum, v) => sum + (v.type === 'payment' ? -(v.amount || 0) : (v.amount || 0)), 0);
 
   const purchaseReturns = (DB.returns || [])
-    .filter(r => DB.purchaseInvoices.find(p => p.id === r.invoiceId && p.supplierId == s.id && p.invoiceType === 'ajel'))
+    .filter(r => DB.purchaseInvoices.find(p => p.id === r.invoiceId && isPurchaseForSupplier(p, s) && p.invoiceType === 'ajel'))
     .reduce((sum, r) => sum + (r.refund || 0), 0);
 
   return (s.balance || 0) + purchasesTotal - supplierPayments - asPaid + vouchersNet - purchaseReturns;
@@ -3575,10 +3612,32 @@ function getProductStock(productId) {
   if (!product) return 0;
   if (product.hasSerial === false) return product.stockQty || 0;
   const serialAvailable = getAvailableSerials(productId).length;
-  if (serialAvailable > 0) return serialAvailable;
-  // Fallback: product is marked serial-based, but no serial rows exist while stockQty has quantity.
-  // Treat stockQty as sellable to avoid blocking legacy/inconsistent data.
-  return Number(product.stockQty || 0);
+  // Fallback for legacy purchases recorded as quantity without serial rows.
+  return Math.max(serialAvailable, Number(product.stockQty || 0));
+}
+
+function syncSerialStockQty() {
+  const serialProducts = (DB.products || []).filter(p => p.hasSerial !== false);
+  let changed = 0;
+  serialProducts.forEach(p => {
+    const available = getAvailableSerials(p.id).length;
+    if (Number(p.stockQty || 0) !== available) {
+      p.stockQty = available;
+      changed++;
+    }
+  });
+
+  saveDB();
+  renderProductsTable(document.querySelector('#page-products .search-input')?.value || '');
+  if (currentPage === 'stockmovement') renderStockMovement();
+  showToast(changed ? `تم تصحيح ${changed} منتج بسيريال` : 'لا توجد فروقات تحتاج تصحيح');
+  logActivity('تصحيح مخزون السيريال', `تمت مزامنة ${changed} منتج`);
+}
+
+function syncSerialStockForProduct(productId) {
+  const product = (DB.products || []).find(p => p.id === productId);
+  if (!product || product.hasSerial === false) return;
+  product.stockQty = getAvailableSerials(productId).length;
 }
 
 function isAmanatModeEnabled(context) {
@@ -4140,6 +4199,15 @@ function renderProductsTable(filter = '') {
   const tbody = document.getElementById('productsTbody');
   let products = DB.products;
   if (filter) products = products.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
+  products = products.slice().sort((a, b) => {
+    const stockA = Number(getProductStock(a.id) || 0);
+    const stockB = Number(getProductStock(b.id) || 0);
+    const hasStockA = stockA > 0 ? 1 : 0;
+    const hasStockB = stockB > 0 ? 1 : 0;
+    if (hasStockA !== hasStockB) return hasStockB - hasStockA; // اللي فيه رصيد يطلع فوق
+    if (stockA !== stockB) return stockB - stockA; // الأعلى رصيداً أولاً
+    return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+  });
   
   tbody.innerHTML = products.map(p => {
     const stock = getProductStock(p.id);
@@ -4282,6 +4350,8 @@ function renderStockMovement() {
 
 function openPurchaseModal() {
   if (!Array.isArray(purCart)) purCart = [];
+  const purchaseModal = document.getElementById('purchaseModal');
+  if (purchaseModal) purchaseModal.dataset.editId = '';
   const suppSearch = document.getElementById('purSupplierSearch'); if (suppSearch) suppSearch.value = '';
   filterPurchaseSuppliers('');
   const _ps = document.getElementById('purProductSearch'); if(_ps){_ps.value='';}
@@ -4295,6 +4365,10 @@ function openPurchaseModal() {
   document.getElementById('purPrice').value = '';
   document.getElementById('purQty').value = '1';
   document.getElementById('purSerials').value = '';
+  const saveBtn = document.querySelector('#purchaseModal .btn-accent');
+  if (saveBtn) { saveBtn.textContent = '💾 حفظ الفاتورة'; saveBtn.setAttribute('onclick', 'savePurchase()'); }
+  const modalTitle = document.querySelector('#purchaseModal .modal-title');
+  if (modalTitle && modalTitle.childNodes && modalTitle.childNodes[0]) modalTitle.childNodes[0].textContent = '🛍️ فاتورة شراء جديدة';
   renderPurCart();
   openModal('purchaseModal');
 }
@@ -4303,20 +4377,75 @@ function filterPurchaseSuppliers(query = '') {
   const suppSelect = document.getElementById('purSupplier');
   if (!suppSelect) return;
   const q = (query || '').trim().toLowerCase();
-  let list = DB.suppliers || [];
+  let suppList = DB.suppliers || [];
+  let custList = DB.customers || [];
   if (q) {
-    list = list.filter(s =>
+    suppList = suppList.filter(s =>
       (s.name && s.name.toLowerCase().includes(q)) ||
       (s.phone && s.phone.includes(q)) ||
       (s.phone2 && s.phone2.includes(q))
     );
+    custList = custList.filter(c =>
+      (c.name && c.name.toLowerCase().includes(q)) ||
+      (c.phone && c.phone.includes(q)) ||
+      (c.phone2 && c.phone2.includes(q))
+    );
   }
   const current = suppSelect.value;
-  suppSelect.innerHTML = '<option value="">اختر المورد...</option>' +
-    list.map(s => `<option value="${s.id}">${s.name}${s.phone ? ' — ' + s.phone : ''}</option>`).join('');
-  if (current && list.some(s => String(s.id) === String(current))) {
+  const suppOptions = suppList.map(s => `<option value="s_${s.id}">🏭 ${s.name}${s.phone ? ' — ' + s.phone : ''}</option>`).join('');
+  const custOptions = custList.map(c => `<option value="c_${c.id}">👤 ${c.name}${c.phone ? ' — ' + c.phone : ''}</option>`).join('');
+  suppSelect.innerHTML = '<option value="">اختر عميل/مورد...</option>' +
+    `<optgroup label="الموردين">${suppOptions || ''}</optgroup>` +
+    `<optgroup label="العملاء">${custOptions || ''}</optgroup>`;
+  const hasCurrent = [...suppSelect.options].some(o => o.value === current);
+  if (current && hasCurrent) {
     suppSelect.value = current;
   }
+}
+
+function resolvePurchasePartySelection(rawVal, fallbackPhone = '') {
+  if (!rawVal) return { supplierId: null, supplierName: '', supplierPhone: fallbackPhone || '' };
+  const val = String(rawVal);
+  if (val.startsWith('s_')) {
+    const sid = parseInt(val.replace('s_', ''), 10);
+    const s = (DB.suppliers || []).find(x => x.id == sid);
+    return {
+      supplierId: s ? s.id : sid,
+      supplierName: s ? (s.name || '') : '',
+      supplierPhone: (s && s.phone) || fallbackPhone || ''
+    };
+  }
+  if (val.startsWith('c_')) {
+    const cid = parseInt(val.replace('c_', ''), 10);
+    const c = (DB.customers || []).find(x => x.id == cid);
+    const name = c ? (c.name || '') : '';
+    const phone = (c && c.phone) || fallbackPhone || '';
+    // Auto-link customer as supplier when used in purchase.
+    let s = (DB.suppliers || []).find(x =>
+      (phone && x.phone && String(x.phone).trim() === String(phone).trim()) ||
+      ((x.name || '').trim() === name.trim() && (!phone || !x.phone))
+    );
+    if (!s && name) {
+      s = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        name,
+        phone,
+        phone2: (c && c.phone2) || '',
+        address: (c && c.address) || '',
+        balance: 0
+      };
+      DB.suppliers.push(s);
+    }
+    return { supplierId: s ? s.id : null, supplierName: name, supplierPhone: phone };
+  }
+  // Backward compatibility: old value was plain supplier id
+  const sid = parseInt(val, 10);
+  const s = (DB.suppliers || []).find(x => x.id == sid);
+  return {
+    supplierId: s ? s.id : (Number.isFinite(sid) ? sid : null),
+    supplierName: s ? (s.name || '') : '',
+    supplierPhone: (s && s.phone) || fallbackPhone || ''
+  };
 }
 
 function renderPurCart() {
@@ -4412,8 +4541,8 @@ function addPurchaseItem() {
 function onPurchaseSupplierChange() {
   const suppId = document.getElementById('purSupplier').value;
   if (suppId) {
-    const supp = DB.suppliers.find(s => s.id == suppId);
-    if (supp) document.getElementById('purSupplierPhone').value = supp.phone || '';
+    const resolved = resolvePurchasePartySelection(suppId, '');
+    if (resolved.supplierPhone) document.getElementById('purSupplierPhone').value = resolved.supplierPhone || '';
   }
 }
 
@@ -4484,16 +4613,26 @@ function onPurchaseInvoiceTypeChange() {
 }
 
 function savePurchase() {
+  const saveBtnEl = document.querySelector('#purchaseModal .btn-accent');
+  if (saveBtnEl?.dataset?.busy === '1') return;
+  if (saveBtnEl) { saveBtnEl.dataset.busy = '1'; saveBtnEl.disabled = true; }
+  try {
+  const purchaseModal = document.getElementById('purchaseModal');
+  const editId = purchaseModal?.dataset?.editId;
+  if (editId) { updatePurchaseInvoice(editId); return; }
   if (purCart.length === 0) { showToast('أضف صنفاً على الأقل', 'error'); return; }
 
-  const supplierId = document.getElementById('purSupplier').value;
+  const supplierRaw = document.getElementById('purSupplier').value;
   const supplierPhone = document.getElementById('purSupplierPhone').value.trim();
   const invoiceType = document.getElementById('purInvoiceType').value;
   const paymentMethod = document.getElementById('purPaymentMethod').value;
   const note = (document.getElementById('purNote')?.value || '').trim();
   const total = purCart.reduce((s, i) => s + i.total, 0);
   const invoiceId = 'PUR-' + Date.now();
-  const supplierName = supplierId ? (DB.suppliers.find(s => s.id == supplierId)?.name || '') : '';
+  const resolvedParty = resolvePurchasePartySelection(supplierRaw, supplierPhone);
+  const supplierId = resolvedParty.supplierId;
+  const supplierName = resolvedParty.supplierName;
+  const finalSupplierPhone = resolvedParty.supplierPhone || supplierPhone;
 
   // Process each item — update stock AND recalculate weighted average cost
   purCart.forEach(item => {
@@ -4524,6 +4663,7 @@ function savePurchase() {
       item.serials.forEach(serial => {
         DB.serials.push({ serial, productId: item.productId, status: 'available', purchaseInvoiceId: invoiceId, saleInvoiceId: null, purchasePrice: item.price });
       });
+      syncSerialStockForProduct(item.productId);
     }
     addStockMovement(item.productId, 'in', item.qty, `شراء - فاتورة ${invoiceId}`);
   });
@@ -4533,7 +4673,7 @@ function savePurchase() {
     date: new Date().toISOString(),
     supplierId: supplierId || null,
     supplier: supplierName,
-    supplierPhone,
+    supplierPhone: finalSupplierPhone,
     items: purCart.map(i => ({ productId: i.productId, name: i.name, qty: i.qty, price: i.price, total: i.total, serials: i.serials })),
     // legacy single-item fields kept for compatibility
     productId: purCart[0].productId,
@@ -4557,6 +4697,9 @@ function savePurchase() {
   showToast(`تم حفظ فاتورة الشراء (${purCart.length} صنف - ${formatMoney(total)})`);
   purCart = [];
   clearDraftByKey(PURCHASE_DRAFT_KEY);
+  } finally {
+    if (saveBtnEl) { saveBtnEl.disabled = false; saveBtnEl.dataset.busy = '0'; }
+  }
 }
 
 function renderPurchases(filter = '') {
@@ -4571,7 +4714,10 @@ function renderPurchases(filter = '') {
   }
 
   const total = purchases.reduce((sum, p) => sum + (p.total || 0), 0);
-  const debt = purchases.filter(p => p.invoiceType === 'ajel').reduce((sum, p) => sum + (p.total || 0), 0);
+  const debt = (DB.suppliers || [])
+    .map(s => getSupplierOutstanding(s.id))
+    .filter(v => v > 0)
+    .reduce((sum, v) => sum + v, 0);
   const uniqueSuppliers = [...new Set(purchases.map(p => p.supplierId).filter(Boolean))].length;
 
   document.getElementById('pur-total').textContent = formatMoney(total);
@@ -4582,14 +4728,17 @@ function renderPurchases(filter = '') {
   // بطاقات الموردين
   let cardsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:16px;">';
   DB.suppliers.forEach(s => {
-    const suppPurchases = purchases.filter(p => p.supplierId == s.id);
+    const suppPurchases = purchases.filter(p => isPurchaseForSupplier(p, s));
     const suppTotal = suppPurchases.reduce((sum, p) => sum + (p.total || 0), 0);
     const suppDebt = getSupplierOutstanding(s.id);
+    const suppDebtAbs = Math.abs(suppDebt);
+    const suppDebtLabel = suppDebt > 0 ? 'عليه' : (suppDebt < 0 ? 'له' : 'صافي');
+    const suppDebtColor = suppDebt > 0 ? 'var(--red)' : (suppDebt < 0 ? 'var(--green)' : 'var(--text2)');
     cardsHtml += `<div class="stat-card" style="padding:12px">
       <div style="font-size:0.9rem;font-weight:700">${s.name}</div>
       <div style="font-size:0.75rem;color:var(--text2)">${s.phone || '-'}</div>
       <div style="margin-top:8px;display:flex;justify-content:space-between"><span style="font-size:0.75rem">المشتريات:</span><span style="font-weight:700">${formatMoney(suppTotal)}</span></div>
-      <div style="display:flex;justify-content:space-between"><span style="font-size:0.75rem">الديون:</span><span style="font-weight:700;color:var(--red)">${formatMoney(suppDebt)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="font-size:0.75rem">الديون (${suppDebtLabel}):</span><span style="font-weight:700;color:${suppDebtColor}">${formatMoney(suppDebtAbs)}</span></div>
     </div>`;
   });
   cardsHtml += '</div>';
@@ -4691,7 +4840,10 @@ function editPurchaseInvoice(id) {
   if (suppSearch) suppSearch.value = '';
   filterPurchaseSuppliers('');
   const suppSelect = document.getElementById('purSupplier');
-  if (suppSelect) suppSelect.value = inv.supplierId || '';
+  if (suppSelect) {
+    const supplierValue = inv.supplierId != null && inv.supplierId !== '' ? `s_${inv.supplierId}` : '';
+    if ([...suppSelect.options].some(o => o.value === supplierValue)) suppSelect.value = supplierValue;
+  }
   const _ps2 = document.getElementById('purProductSearch'); if(_ps2){_ps2.value='';}
   const _ph2 = document.getElementById('purProductSelect'); if(_ph2){_ph2.value='';}
   const _pd2 = document.getElementById('purProductDropdown'); if(_pd2){_pd2.style.display='none';_pd2.innerHTML='';}
@@ -4704,8 +4856,11 @@ function editPurchaseInvoice(id) {
   document.getElementById('purSerials').value = '';
   renderPurCart();
 
+  const purchaseModal = document.getElementById('purchaseModal');
+  if (purchaseModal) purchaseModal.dataset.editId = String(id);
+
   // Change save button to update mode
-  const saveBtn = document.querySelector('#purchaseModal .btn-accent[onclick="savePurchase()"]');
+  const saveBtn = document.querySelector('#purchaseModal .btn-accent');
   if (saveBtn) {
     saveBtn.textContent = '💾 تحديث الفاتورة';
     saveBtn.setAttribute('onclick', `updatePurchaseInvoice('${id}')`);
@@ -4717,21 +4872,30 @@ function editPurchaseInvoice(id) {
 }
 
 function updatePurchaseInvoice(id) {
+  const saveBtnEl = document.querySelector('#purchaseModal .btn-accent');
+  if (saveBtnEl?.dataset?.busy === '1') return;
+  if (saveBtnEl) { saveBtnEl.dataset.busy = '1'; saveBtnEl.disabled = true; }
+  try {
   if (purCart.length === 0) { showToast('أضف صنفاً على الأقل', 'error'); return; }
   const inv = DB.purchaseInvoices.find(p => p.id === id);
   if (!inv) return;
 
-  const supplierId = document.getElementById('purSupplier').value;
+  const supplierRaw = document.getElementById('purSupplier').value;
   const supplierPhone = document.getElementById('purSupplierPhone').value.trim();
   const invoiceType = document.getElementById('purInvoiceType').value;
   const paymentMethod = document.getElementById('purPaymentMethod').value;
   const note = (document.getElementById('purNote')?.value || '').trim();
   const newTotal = purCart.reduce((s, i) => s + i.total, 0);
   const oldTotal = inv.total;
-  const supplierName = supplierId ? (DB.suppliers.find(s => s.id == supplierId)?.name || '') : '';
+  const resolvedParty = resolvePurchasePartySelection(supplierRaw, supplierPhone);
+  const supplierId = resolvedParty.supplierId;
+  const supplierName = resolvedParty.supplierName;
+  const finalSupplierPhone = resolvedParty.supplierPhone || supplierPhone;
 
   // ===== REVERSE OLD INVOICE EFFECTS =====
-  const oldItems = inv.items || [];
+  const oldItems = (inv.items && inv.items.length > 0)
+    ? inv.items
+    : [{ productId: inv.productId, qty: inv.qty || 0, serials: [], noSerial: true }];
   oldItems.forEach(item => {
     if (item.serials && item.serials.length > 0) {
       // Remove old serials from DB
@@ -4779,7 +4943,7 @@ function updatePurchaseInvoice(id) {
   // ===== UPDATE INVOICE RECORD =====
   inv.supplierId = supplierId || null;
   inv.supplier = supplierName;
-  inv.supplierPhone = supplierPhone;
+  inv.supplierPhone = finalSupplierPhone;
   inv.invoiceType = invoiceType;
   inv.paymentMethod = invoiceType === 'cash' ? paymentMethod : 'ajel';
   inv.note = note;
@@ -4792,6 +4956,8 @@ function updatePurchaseInvoice(id) {
   inv.editedBy = currentUser ? currentUser.username : 'system';
 
   // إعادة زر الحفظ للوضع الافتراضي
+  const purchaseModal = document.getElementById('purchaseModal');
+  if (purchaseModal) purchaseModal.dataset.editId = '';
   const saveBtn = document.querySelector('#purchaseModal .btn-accent');
   if (saveBtn) { saveBtn.textContent = '💾 حفظ الفاتورة'; saveBtn.setAttribute('onclick', 'savePurchase()'); }
   document.querySelector('#purchaseModal .modal-title').childNodes[0].textContent = '🛍️ فاتورة شراء جديدة';
@@ -4803,6 +4969,9 @@ function updatePurchaseInvoice(id) {
   renderTreasury();
   showToast(`✅ تم تحديث فاتورة الشراء #${id}${purTMsg}`);
   purCart = [];
+  } finally {
+    if (saveBtnEl) { saveBtnEl.disabled = false; saveBtnEl.dataset.busy = '0'; }
+  }
 }
 
 function exportPurchasesCSV() {
@@ -5199,9 +5368,9 @@ function renderCustomersTable(filter = '') {
   const tbody = document.getElementById('customersTbody');
   let customers = DB.customers;
   if (filter) customers = customers.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()) || (c.phone && c.phone.includes(filter)));
-  
-  tbody.innerHTML = customers.map((c, idx) => {
-    const linkedSupplier = (function(customer){
+
+  const rowsData = customers.map(c => {
+    const linkedSupplier = (function (customer) {
       const norm = v => String(v || '').replace(/\s/g, '').replace(/^\+?20/, '0').trim();
       const cPhones = [norm(customer.phone), norm(customer.phone2)].filter(Boolean);
       let s = null;
@@ -5216,6 +5385,7 @@ function renderCustomersTable(filter = '') {
       if (!cName) return null;
       return (DB.suppliers || []).find(x => (x.name || '').trim().toLowerCase() === cName) || null;
     })(c);
+
     let net = getCustomerOutstanding(c.id); // >0 العميل مديون لنا
     let linked = false;
     if (linkedSupplier) {
@@ -5229,6 +5399,19 @@ function renderCustomersTable(filter = '') {
         : { saleAfter: Math.max(0, net), purAfter: Math.max(0, purBalance) };
       net = after.saleAfter - after.purAfter;
     }
+    return { c, net, linked };
+  }).sort((a, b) => {
+    const hasBalanceA = Math.abs(Number(a.net || 0)) > 0.0001 ? 1 : 0;
+    const hasBalanceB = Math.abs(Number(b.net || 0)) > 0.0001 ? 1 : 0;
+    if (hasBalanceA !== hasBalanceB) return hasBalanceB - hasBalanceA; // غير الصفر أولاً
+    if (hasBalanceA === 1) return Math.abs(b.net) - Math.abs(a.net); // الأكبر تأثيراً أولاً
+    return String(a.c.name || '').localeCompare(String(b.c.name || ''), 'ar');
+  });
+
+  tbody.innerHTML = rowsData.map((row, idx) => {
+    const c = row.c;
+    const net = row.net;
+    const linked = row.linked;
     const netAbs = Math.abs(net);
     const netColor = net > 0 ? 'var(--red)' : net < 0 ? 'var(--green)' : 'var(--text2)';
     const netLabel = net > 0 ? 'مديون لنا' : net < 0 ? 'له عندنا' : 'متساوي';
@@ -5578,6 +5761,7 @@ function saveNewSaleInvoice() {
         const s = DB.serials.find(x => x.serial === serial && x.productId === item.productId);
         if (s) { s.status = 'sold'; s.saleInvoiceId = invoiceId; }
       });
+      syncSerialStockForProduct(item.productId);
     }
     addStockMovement(item.productId, 'out', item.qty, `بيع - فاتورة ${invoiceId}`);
   });
@@ -6700,14 +6884,28 @@ function renderTreasury() {
   
   // جدول حركة الخزنة
   const dateFilter = document.getElementById('cashDateFilter').value;
-  const searchFilter = document.getElementById('cashSearchFilter').value.toLowerCase();
-  
-  let entries = DB.cashFlow;
-  if (dateFilter) {
-    entries = entries.filter(c => new Date(c.date).toISOString().slice(0, 10) === dateFilter);
-  }
-  if (searchFilter) {
-    entries = entries.filter(c => (c.desc && c.desc.toLowerCase().includes(searchFilter)) || (c.user && c.user.toLowerCase().includes(searchFilter)));
+  const entries = getFilteredCashFlowEntries();
+
+  const dailyDate = dateFilter || new Date().toISOString().slice(0, 10);
+  const dayEntries = DB.cashFlow.filter(c => new Date(c.date).toISOString().slice(0, 10) === dailyDate);
+  const dayIn = dayEntries.filter(c => c.type === 'in').reduce((sum, c) => sum + (c.amount || 0), 0);
+  const dayOut = dayEntries.filter(c => c.type === 'out').reduce((sum, c) => sum + (c.amount || 0), 0);
+  const dayNet = dayIn - dayOut;
+  document.getElementById('cashDailyDiffDate').textContent = `اليوم: ${new Date(dailyDate).toLocaleDateString('ar-EG')}`;
+  document.getElementById('cashDailyIn').textContent = formatMoney(dayIn);
+  document.getElementById('cashDailyOut').textContent = formatMoney(dayOut);
+  const netEl = document.getElementById('cashDailyNet');
+  netEl.textContent = formatMoney(dayNet);
+  netEl.style.color = dayNet >= 0 ? 'var(--green)' : 'var(--red)';
+
+  const duplicateAlertEl = document.getElementById('cashDuplicateAlert');
+  const duplicateWarnings = detectCashDuplicates(DB.cashFlow);
+  if (!duplicateWarnings.length) {
+    duplicateAlertEl.textContent = 'لا توجد تنبيهات تكرار حالياً';
+    duplicateAlertEl.style.color = 'var(--text2)';
+  } else {
+    duplicateAlertEl.textContent = `⚠️ تم رصد ${duplicateWarnings.length} تكرار محتمل خلال آخر 6 ساعات (مثال: ${duplicateWarnings[0]})`;
+    duplicateAlertEl.style.color = 'var(--red)';
   }
   
   const tbody = document.getElementById('cashFlowTbody');
@@ -6722,6 +6920,102 @@ function renderTreasury() {
     <td>${formatMoney(c.balance)}</td>
     <td>${c.user || '-'}</td>
   </tr>`).join('') || '<tr><td colspan="9" style="text-align:center">لا توجد حركات</td></tr>';
+}
+
+function renderCashFlow() { renderTreasury(); }
+
+function getFilteredCashFlowEntries() {
+  const dateFilter = document.getElementById('cashDateFilter')?.value || '';
+  const searchFilter = (document.getElementById('cashSearchFilter')?.value || '').toLowerCase();
+  const reverseOnly = !!document.getElementById('cashReverseOnlyFilter')?.checked;
+
+  let entries = DB.cashFlow || [];
+  if (dateFilter) {
+    entries = entries.filter(c => new Date(c.date).toISOString().slice(0, 10) === dateFilter);
+  }
+  if (searchFilter) {
+    entries = entries.filter(c => (c.desc && c.desc.toLowerCase().includes(searchFilter)) || (c.user && c.user.toLowerCase().includes(searchFilter)));
+  }
+  if (reverseOnly) {
+    entries = entries.filter(c => isCashReversalEntry(c));
+  }
+  return entries;
+}
+
+function isCashReversalEntry(entry) {
+  const d = (entry?.desc || '').toLowerCase();
+  return d.includes('عكس') || d.includes('إلغاء') || d.includes('الغاء') || d.includes('↩️');
+}
+
+function detectCashDuplicates(entries) {
+  const sixHoursMs = 6 * 60 * 60 * 1000;
+  const groups = {};
+  (entries || []).forEach(e => {
+    if (!e || !e.amount) return;
+    const key = [
+      e.type || '',
+      e.method || '',
+      Number(e.amount).toFixed(2),
+      ((e.desc || '').trim().toLowerCase().replace(/\s+/g, ' '))
+    ].join('|');
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(e);
+  });
+
+  const warnings = [];
+  Object.values(groups).forEach(group => {
+    if (group.length < 2) return;
+    group.sort((a, b) => new Date(a.date) - new Date(b.date));
+    for (let i = 1; i < group.length; i++) {
+      const prev = new Date(group[i - 1].date).getTime();
+      const curr = new Date(group[i].date).getTime();
+      if (Number.isFinite(prev) && Number.isFinite(curr) && (curr - prev) <= sixHoursMs) {
+        warnings.push(`${formatMoney(group[i].amount)} - ${(group[i].desc || 'بدون بيان').slice(0, 40)}`);
+        break;
+      }
+    }
+  });
+  return warnings;
+}
+
+function exportCashFlowCSV() {
+  const entries = getFilteredCashFlowEntries();
+  if (!entries.length) {
+    showToast('لا توجد حركات للتصدير', 'error');
+    return;
+  }
+
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows = [
+    ['#', 'التاريخ', 'النوع', 'المصدر', 'طريقة الدفع', 'وارد', 'صادر', 'الرصيد', 'البيان']
+  ];
+
+  entries.forEach((c, idx) => {
+    rows.push([
+      entries.length - idx,
+      new Date(c.date).toLocaleString('ar-EG'),
+      c.type === 'in' ? 'وارد' : 'صادر',
+      c.desc || '-',
+      getPaymentLabel(c.method),
+      c.type === 'in' ? (c.amount || 0) : '',
+      c.type === 'out' ? (c.amount || 0) : '',
+      c.balance || 0,
+      c.user || '-'
+    ]);
+  });
+
+  const csv = '\uFEFF' + rows.map(r => r.map(esc).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  const dateTag = new Date().toISOString().slice(0, 10);
+  a.href = URL.createObjectURL(blob);
+  a.download = `cash-flow-${dateTag}.csv`;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  showToast(`تم تصدير ${entries.length} حركة`);
 }
 
 // ================= EXPENSES =================
@@ -8076,6 +8370,7 @@ function completeSale(forceRun = false) {
         const s = DB.serials.find(x => x.serial === serial);
         if (s) { s.status = 'sold'; s.saleInvoiceId = invoiceId; }
       });
+      syncSerialStockForProduct(item.productId);
     }
   });
 
@@ -8173,6 +8468,7 @@ function completePurchaseFromPOS() {
       item.serials.forEach(serial => {
         DB.serials.push({ serial, productId: item.productId, status: 'available', purchaseInvoiceId: invoiceId, saleInvoiceId: null, purchasePrice: item.price });
       });
+      syncSerialStockForProduct(item.productId);
     }
     addStockMovement(item.productId, 'in', item.qty, `شراء POS - فاتورة ${invoiceId}`);
   });
