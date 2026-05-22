@@ -1078,7 +1078,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
         </div>
       </div>
       <div class="table-container">
-        <div class="overflow-x"><table class="data-table"><thead><tr><th>ID</th><th>الاسم</th><th>المخزون</th><th>الحد الأدنى</th><th>سعر الشراء</th><th>سعر البيع</th><th>الربح</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="productsTbody"></tbody></table></div>
+        <div class="overflow-x"><table class="data-table"><thead><tr><th>ID</th><th>الاسم</th><th>المخزون</th><th>الحد الأدنى</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="productsTbody"></tbody></table></div>
       </div>
       <div class="table-container">
         <div class="table-header"><div class="table-title">📋 سجل تغييرات المنتجات</div><button class="btn btn-danger btn-sm" onclick="clearProductLog()">🗑️ مسح</button></div>
@@ -1992,7 +1992,7 @@ body{font-family:var(--app-font);background:var(--bg);color:var(--text);min-heig
   <div class="modal-footer">
     <button class="btn btn-outline" onclick="closeModal('purchaseModal')">إلغاء</button>
     <button class="btn btn-danger" onclick="clearInvoiceDraft('purchase')">🧹 مسح المسودة</button>
-    <button class="btn btn-accent" onclick="savePurchase()">💾 حفظ الفاتورة</button>
+    <button class="btn btn-accent" id="purSaveBtn" onclick="savePurchase()">💾 حفظ الفاتورة</button>
   </div>
 </div></div>
 
@@ -3740,7 +3740,9 @@ function consumeNoSerialCost(productId, qty) {
   if (!product || product.hasSerial !== false || !qty) return { totalCost: 0, unitCost: 0 };
   ensureNoSerialCostLayers(product);
   let remaining = Number(qty) || 0;
-  let totalCost = 0;
+  // Weighted-average costing: use current average buyPrice for sale cost.
+  const unitCost = Number(product.buyPrice || 0);
+  const totalCost = unitCost * remaining;
   const layers = product.costLayers;
 
   for (let i = 0; i < layers.length && remaining > 0; i++) {
@@ -3748,16 +3750,12 @@ function consumeNoSerialCost(productId, qty) {
     const layerQty = Number(layer.qty || 0);
     if (layerQty <= 0) continue;
     const take = Math.min(layerQty, remaining);
-    totalCost += take * Number(layer.cost || 0);
     layer.qty = layerQty - take;
     remaining -= take;
   }
 
   product.costLayers = layers.filter(l => Number(l.qty || 0) > 0);
-  if (remaining > 0) {
-    totalCost += remaining * Number(product.buyPrice || 0);
-  }
-  return { totalCost, unitCost: (Number(qty) > 0 ? totalCost / Number(qty) : 0) };
+  return { totalCost, unitCost };
 }
 
 function addCashEntry(type, amount, method, desc) {
@@ -4275,7 +4273,6 @@ function renderProductsTable(filter = '') {
   
   tbody.innerHTML = products.map(p => {
     const stock = getProductStock(p.id);
-    const profit = (p.sellPrice || 0) - (p.buyPrice || 0);
     const status = stock <= (p.minStock || 5) ? '<span class="badge badge-red">منخفض</span>' : '<span class="badge badge-green">متوفر</span>';
     const serialBadge = p.hasSerial === false ? '<span class="badge badge-yellow" style="font-size:0.6rem">بدون سيريال</span>' : '<span class="badge badge-blue" style="font-size:0.6rem">بسيريال</span>';
     return `<tr>
@@ -4283,9 +4280,6 @@ function renderProductsTable(filter = '') {
       <td>${p.name} ${serialBadge}</td>
       <td>${stock}</td>
       <td>${p.minStock || 5}</td>
-      <td>${formatMoney(p.buyPrice)}</td>
-      <td>${formatMoney(p.sellPrice)}</td>
-      <td>${formatMoney(profit)}</td>
       <td>${status}</td>
       <td>
         <button class="btn btn-sm btn-accent" onclick="viewProductSerials(${p.id})">📋</button>
@@ -4293,7 +4287,7 @@ function renderProductsTable(filter = '') {
         ${can('deleteProducts') ? `<button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})">🗑️</button>` : ''}
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="9" style="text-align:center">لا توجد منتجات</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="text-align:center">لا توجد منتجات</td></tr>';
   
   // سجل تغييرات المنتجات
   const logTbody = document.getElementById('productLogTbody');
@@ -4429,7 +4423,7 @@ function openPurchaseModal() {
   document.getElementById('purPrice').value = '';
   document.getElementById('purQty').value = '1';
   document.getElementById('purSerials').value = '';
-  const saveBtn = document.querySelector('#purchaseModal .btn-accent');
+  const saveBtn = document.getElementById('purSaveBtn');
   if (saveBtn) { saveBtn.textContent = '💾 حفظ الفاتورة'; saveBtn.setAttribute('onclick', 'savePurchase()'); }
   const modalTitle = document.querySelector('#purchaseModal .modal-title');
   if (modalTitle && modalTitle.childNodes && modalTitle.childNodes[0]) modalTitle.childNodes[0].textContent = '🛍️ فاتورة شراء جديدة';
@@ -4677,7 +4671,7 @@ function onPurchaseInvoiceTypeChange() {
 }
 
 function savePurchase() {
-  const saveBtnEl = document.querySelector('#purchaseModal .btn-accent');
+  const saveBtnEl = document.getElementById('purSaveBtn');
   if (saveBtnEl?.dataset?.busy === '1') return;
   if (saveBtnEl) { saveBtnEl.dataset.busy = '1'; saveBtnEl.disabled = true; }
   try {
@@ -4926,7 +4920,7 @@ function editPurchaseInvoice(id) {
   if (purchaseModal) purchaseModal.dataset.editId = String(id);
 
   // Change save button to update mode
-  const saveBtn = document.querySelector('#purchaseModal .btn-accent');
+  const saveBtn = document.getElementById('purSaveBtn');
   if (saveBtn) {
     saveBtn.textContent = '💾 تحديث الفاتورة';
     saveBtn.setAttribute('onclick', `updatePurchaseInvoice('${id}')`);
@@ -4938,7 +4932,7 @@ function editPurchaseInvoice(id) {
 }
 
 function updatePurchaseInvoice(id) {
-  const saveBtnEl = document.querySelector('#purchaseModal .btn-accent');
+  const saveBtnEl = document.getElementById('purSaveBtn');
   if (saveBtnEl?.dataset?.busy === '1') return;
   if (saveBtnEl) { saveBtnEl.dataset.busy = '1'; saveBtnEl.disabled = true; }
   try {
@@ -5024,7 +5018,7 @@ function updatePurchaseInvoice(id) {
   // إعادة زر الحفظ للوضع الافتراضي
   const purchaseModal = document.getElementById('purchaseModal');
   if (purchaseModal) purchaseModal.dataset.editId = '';
-  const saveBtn = document.querySelector('#purchaseModal .btn-accent');
+  const saveBtn = document.getElementById('purSaveBtn');
   if (saveBtn) { saveBtn.textContent = '💾 حفظ الفاتورة'; saveBtn.setAttribute('onclick', 'savePurchase()'); }
   document.querySelector('#purchaseModal .modal-title').childNodes[0].textContent = '🛍️ فاتورة شراء جديدة';
 
