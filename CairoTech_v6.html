@@ -5943,8 +5943,16 @@ function saveNewSaleInvoice() {
   if (invoiceType === 'ajel' && partialPaid > 0) addCashEntry('in', partialPaid, paymentType, `دفعة مقدمة بيع آجل - ${customer} - ${invoiceId}`);
   logActivity('فاتورة بيع', `فاتورة #${invoiceId} - ${formatMoney(total)}`);
   saveDB();
+  /* ═══════════════════════════════════════════════════════════
+     FIX: كان ينقص استدعاء renderDashboard(), renderTreasury(),
+     renderReports() بعد الحفظ، مما يمنع تحديث لوحة التحكم
+     والتقارير والخزنة بشكل فوري.
+     ═══════════════════════════════════════════════════════════ */
   closeModal('newSaleModal');
   renderInvoices();
+  renderDashboard();
+  renderTreasury();
+  renderReports();
   printInvoice(invoice);
   showToast(amanatCount > 0 ? `✅ تم البيع، مع تسجيل ${amanatCount} وحدة كأمانات` : '✅ تم إتمام البيع بنجاح');
   clearDraftByKey(NS_DRAFT_KEY);
@@ -8571,6 +8579,17 @@ function completeSale(forceRun = false) {
   currentCart.forEach(item => addStockMovement(item.productId, 'out', item.qty, `بيع - فاتورة ${invoiceId}`));
   logActivity('فاتورة بيع', `فاتورة #${invoiceId} - ${formatMoney(total)}`);
   saveDB();
+  /* ═══════════════════════════════════════════════════════════
+     FIX: كان ينقص استدعاء دوال التحديث بعد حفظ الفاتورة، مما
+     يمنع ظهورها في أرشيف الفواتير ولوحة التحكم والتقارير والخزنة
+     حتى يتم إعادة تحميل البرنامج.
+     تمت إضافة: renderInvoices(), renderDashboard(),
+     renderTreasury(), renderReports()
+     ═══════════════════════════════════════════════════════════ */
+  renderInvoices();
+  renderDashboard();
+  renderTreasury();
+  renderReports();
   _lastInvoiceForShare = invoice;
   printInvoice(invoice);
 
@@ -8737,6 +8756,14 @@ function renderInvoices(filter = '') {
       inv.id.toLowerCase().includes(filter.toLowerCase())
     );
   }
+  
+  /* ═══════════════════════════════════════════════════════════
+     FIX: كان العرض يستخدم invoices.slice(0, 100) الذي يعرض
+     أول 100 فاتورة فقط (الأقدم)، مما يخفي الفواتير الجديدة
+     عند تجاوز 100 فاتورة.
+     تمت إضافة ترتيب تنازلي حسب التاريخ لعرض الأحدث أولاً.
+     ═══════════════════════════════════════════════════════════ */
+  invoices = [...invoices].sort((a, b) => new Date(b.date) - new Date(a.date));
   
   const total = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const profit = invoices.reduce((sum, inv) => sum + (inv.profit || 0), 0);
@@ -9243,8 +9270,14 @@ function deleteSaleInvoice(id) {
   DB.saleInvoices = DB.saleInvoices.filter(i => i.id !== id);
   logActivity('حذف فاتورة بيع', `#${id} - ${inv.customer} - ${formatMoney(inv.total)}`);
   saveDB();
+  /* ═══════════════════════════════════════════════════════════
+     FIX: كان ينقص استدعاء renderDashboard() و renderReports()
+     بعد حذف الفاتورة، مما يمنع تحديث لوحة التحكم والتقارير.
+     ═══════════════════════════════════════════════════════════ */
   renderInvoices();
   renderTreasury();
+  renderDashboard();
+  renderReports();
   showToast(`تم حذف الفاتورة #${id} وتحديث المخزون والخزنة`);
 }
 // ===== DELETE PURCHASE INVOICE (with full inventory + treasury sync) =====
@@ -9436,9 +9469,15 @@ inv.customer = document.getElementById('editSaleInvCustomer').value.trim() || in
 
   logActivity('تعديل فاتورة بيع', `#${id} - ${inv.customer} - ${formatMoney(newTotal)}${treasuryMsg}`);
   saveDB();
+  /* ═══════════════════════════════════════════════════════════
+     FIX: كان ينقص استدعاء renderDashboard() و renderReports()
+     بعد تعديل الفاتورة، مما يمنع تحديث لوحة التحكم والتقارير.
+     ═══════════════════════════════════════════════════════════ */
   closeModal('editSaleInvoiceModal');
   renderInvoices();
   renderTreasury();
+  renderDashboard();
+  renderReports();
   const payLabel = m => m==='cash'?'كاش':m==='vodafone'?'فودافون':m==='instapay'?'InstaPay':m==='fawry'?'فوري':m||'';
   const tMsg = (oldCashAmount > 0 && newCashAmount > 0 && oldPayment !== newPayment)
     ? ` | تحويل خزنة: ${payLabel(oldPayment)} → ${payLabel(newPayment)}`
