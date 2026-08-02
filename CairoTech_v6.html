@@ -6637,20 +6637,37 @@ function updateReturn(id) {
   if (!reason) { showToast('أدخل سبب المرتجع', 'error'); return; }
 
   // عكس حركة الخزنة القديمة إن وُجدت
-  if (r.action === 'refund' && r.refund > 0) {
-    addCashEntry('in', r.refund, r.refundMethod || 'cash', `إلغاء مرتجع قديم ${r.id}`);
+  /* ═══════════════════════════════════════════════════════════
+     FIX (AUDIT): عكس الخزنة كان يتعامل مع مرتجع البيع فقط
+     (action === 'refund'). مرتجع الشراء يستخدم action ===
+     'supplier_refund' وكان يُضيف رصيداً للخزنة (in) عند الإنشاء
+     دون عكسه عند التعديل، تاركاً حركة خزنة يتيمة.
+     الآن يُعكس الاتجاه الصحيح لكل نوع:
+     - مرتجع بيع (refund): كان 'out' فيُعكس بـ 'in'.
+     - مرتجع شراء (supplier_refund): كان 'in' فيُعكس بـ 'out'.
+     ═══════════════════════════════════════════════════════════ */
+  if (r.refund > 0) {
+    if (r.invoiceType === 'purchase') {
+      if (r.action === 'supplier_refund') addCashEntry('out', r.refund, r.refundMethod || 'cash', `إلغاء مرتجع قديم ${r.id}`);
+    } else if (r.action === 'refund') {
+      addCashEntry('in', r.refund, r.refundMethod || 'cash', `إلغاء مرتجع قديم ${r.id}`);
+    }
   }
 
   r.reason = reason;
   r.action = action;
-  r.refund = action === 'refund' ? refund : 0;
+  r.refund = (action === 'refund' || action === 'supplier_refund') ? refund : 0;
   r.refundMethod = refundMethod;
   r.editedAt = new Date().toISOString();
   r.editedBy = currentUser ? currentUser.username : 'system';
 
   // إضافة حركة الخزنة الجديدة
-  if (action === 'refund' && refund > 0) {
-    addCashEntry('out', refund, refundMethod, `مرتجع محدّث ${r.id} - ${r.product || ''}`);
+  if (refund > 0) {
+    if (r.invoiceType === 'purchase') {
+      if (action === 'supplier_refund') addCashEntry('in', refund, refundMethod, `مرتجع محدّث ${r.id} - ${r.product || ''}`);
+    } else if (action === 'refund') {
+      addCashEntry('out', refund, refundMethod, `مرتجع محدّث ${r.id} - ${r.product || ''}`);
+    }
   }
 
   // إعادة زر الحفظ للوضع الافتراضي
@@ -6721,8 +6738,20 @@ function deleteReturn(id) {
   }
 
   // عكس تأثير الخزنة
-  if (r && r.action === 'refund' && r.refund > 0) {
-    addCashEntry('in', r.refund, r.refundMethod || 'cash', `إلغاء مرتجع ${id}`);
+  /* ═══════════════════════════════════════════════════════════
+     FIX (AUDIT): كان العكس يحدث فقط لمرتجع البيع (action ===
+     'refund' -> in). مرتجع الشراء (action === 'supplier_refund')
+     كان يُضيف رصيداً للخزنة (in) عند الإنشاء دون عكسه عند الحذف،
+     تاركاً حركة خزنة يتيمة. الآن يُعكس بالاتجاه الصحيح:
+     - مرتجع بيع (refund): كان 'out' فيُعكس بـ 'in'.
+     - مرتجع شراء (supplier_refund): كان 'in' فيُعكس بـ 'out'.
+     ═══════════════════════════════════════════════════════════ */
+  if (r.refund > 0) {
+    if (r.invoiceType === 'purchase') {
+      if (r.action === 'supplier_refund') addCashEntry('out', r.refund, r.refundMethod || 'cash', `إلغاء مرتجع ${id}`);
+    } else if (r.action === 'refund') {
+      addCashEntry('in', r.refund, r.refundMethod || 'cash', `إلغاء مرتجع ${id}`);
+    }
   }
   DB.returns = DB.returns.filter(x => x.id !== id);
   saveDB();
@@ -7230,9 +7259,18 @@ function renderExpenses() {
 
 function deleteExpense(id) {
   if (!confirm('هل تريد حذف هذا المصروف؟')) return;
-  DB.expenses = DB.expenses.filter(e => e.id !== id);
+  const e = DB.expenses.find(x => x.id === id);
+  if (!e) return;
+  /* ═══════════════════════════════════════════════════════════
+     FIX (AUDIT): حذف المصروف كان يزيل السجل دون عكس حركة الخزنة
+     (addCashEntry('out') عند الإنشاء)، تاركاً حركة خزنة يتيمة.
+     الآن يُعكس المبلغ بالاتجاه المعاكس بنفس طريقة الدفع.
+     ═══════════════════════════════════════════════════════════ */
+  addCashEntry('in', e.amount || 0, e.from || 'cash', `إلغاء مصروف ${e.desc}`);
+  DB.expenses = DB.expenses.filter(x => x.id !== id);
   saveDB();
   renderExpenses();
+  renderTreasury();
   showToast('تم الحذف');
 }
 
@@ -10707,9 +10745,19 @@ function clearVoucherFilter() {
 
 function deleteVoucher(id) {
   if (!confirm('هل تريد حذف هذا السند؟')) return;
-  DB.vouchers = (DB.vouchers || []).filter(v => v.id !== id);
+  const v = (DB.vouchers || []).find(x => x.id === id);
+  if (!v) return;
+  /* ═══════════════════════════════════════════════════════════
+     FIX (AUDIT): حذف السند كان يزيل السجل دون عكس حركة الخزنة
+     (سند قبض -> in / سند صرف -> out عند الإنشاء)، تاركاً حركة
+     خزنة يتيمة. الآن يُعكس المبلغ بالاتجاه المعاكس بنفس الطريقة.
+     ═══════════════════════════════════════════════════════════ */
+  const reverseType = v.type === 'receipt' ? 'out' : 'in';
+  addCashEntry(reverseType, v.amount || 0, v.method || 'cash', `إلغاء سند ${v.id}`);
+  DB.vouchers = (DB.vouchers || []).filter(x => x.id !== id);
   saveDB();
   renderVouchers();
+  renderTreasury();
   showToast('تم حذف السند');
 }
 
