@@ -8567,10 +8567,19 @@ function completeSale(forceRun = false) {
     const downPayment = parseFloat(document.getElementById('instDownPayment').value) || 0;
     const months = parseInt(document.getElementById('instMonths').value) || 6;
     const remaining = total - downPayment;
+    /* ═══════════════════════════════════════════════════════════
+       FIX (TREASURY_REVERSAL):
+       تم ربط سجل التقسيط بالفاتورة (invoiceId) وحفظ مبلغ مقدم
+       التقسيط على الفاتورة نفسها (installmentDownPayment) حتى
+       يمكن عند حذف الفاتورة عكس مبلغ الخزنة بدقة (المقدم فقط)
+       وحذف سجل التقسيط المرتبط بالفاتورة.
+       ═══════════════════════════════════════════════════════════ */
+    invoice.installmentDownPayment = downPayment;
     DB.installments.push({
       id: Date.now(), date: new Date().toISOString(), customer, phone: customerPhone,
       total, downPayment, remaining, months, monthlyAmount: remaining / months,
       day: 1, paidMonths: 0, status: 'active',
+      invoiceId,
       user: currentUser ? currentUser.username : 'system'
     });
     if (downPayment > 0) addCashEntry('in', downPayment, 'cash', `مقدم تقسيط - ${customer}`);
@@ -9240,6 +9249,17 @@ function editSerialsChanged(idx) {
 }
 
 // ===== DELETE SALE INVOICE (with full inventory + treasury sync) =====
+/* ═══════════════════════════════════════════════════════════
+   FIX (TREASURY_REVERSAL):
+   دالة مساعدة للعثور على سجل التقسيط المرتبط بفاتورة بيع،
+   مع توافق مع البيانات القديمة (قبل إضافة حقل invoiceId)
+   عبر مطابقة العميل والإجمالي.
+   ═══════════════════════════════════════════════════════════ */
+function getSaleInvoiceInstallment(invoiceId, customer, total) {
+  return (DB.installments || []).find(x => x.invoiceId === invoiceId)
+    || (DB.installments || []).find(x => x.customer === customer && Number(x.total) === Number(total));
+}
+
 function deleteSaleInvoice(id) {
   const inv = DB.saleInvoices.find(i => i.id === id);
   if (!inv) return;
@@ -9261,7 +9281,32 @@ function deleteSaleInvoice(id) {
     if (item.productId) addStockMovement(item.productId, 'in', item.qty, `إلغاء فاتورة بيع #${id}`);
   });
 
-  if (inv.invoiceType === 'cash' && inv.total > 0) {
+  /* ═══════════════════════════════════════════════════════════
+     FIX (TREASURY_REVERSAL):
+     عكس الخزنة يجب أن يطابق بالضبط ما تمت إضافته وقت إنشاء الفاتورة.
+
+     الحالات:
+     1) فاتورة تقسيط (payment === 'installment'):
+        - عند الإنشاء أُضيف مقدم التقسيط فقط (بطريقة cash) للخزنة.
+        - كان الكود القديم يعكس إجمالي الفاتورة كاملاً (خطأ) وليس المقدم فقط،
+          مما يجعل الخزنة تصل لرصيد سالب.
+        - الآن: يُعكس المقدم فقط، ويُحذف سجل التقسيط المرتبط بالفاتورة.
+     2) فاتورة كاش (invoiceType === 'cash'):
+        - يُعكس إجمالي الفاتورة بنفس طريقة الدفع.
+     3) فاتورة آجل (invoiceType === 'ajel'):
+        - يُعكس المبلغ المدفوع مقدماً فقط بنفس طريقة الدفع.
+     ═══════════════════════════════════════════════════════════ */
+  if (inv.payment === 'installment') {
+    const inst = getSaleInvoiceInstallment(id, inv.customer, inv.total);
+    const downPayment = Number(inv.installmentDownPayment != null ? inv.installmentDownPayment : (inst ? inst.downPayment : 0));
+    if (downPayment > 0) {
+      addCashEntry('out', downPayment, 'cash', `إلغاء مقدم تقسيط لفاتورة بيع #${id} - ${inv.customer}`);
+    }
+    if (inst) {
+      const instIdx = DB.installments.indexOf(inst);
+      if (instIdx !== -1) DB.installments.splice(instIdx, 1);
+    }
+  } else if (inv.invoiceType === 'cash' && inv.total > 0) {
     addCashEntry('out', inv.total, inv.payment || 'cash', `إلغاء فاتورة بيع #${id} - ${inv.customer}`);
   } else if (inv.invoiceType === 'ajel' && (inv.paidAmount || 0) > 0) {
     addCashEntry('out', inv.paidAmount, inv.payment || 'cash', `إلغاء دفعة مقدمة لفاتورة آجل #${id} - ${inv.customer}`);
@@ -9433,11 +9478,26 @@ function saveEditSaleInvoice() {
   const newInvoiceType = document.getElementById('editSaleInvType').value;
 
   const oldPaidAjel = Math.max(0, Number(inv.paidAmount || 0));
+  /* ═══════════════════════════════════════════════════════════
+     FIX (TREASURY_REVERSAL):
+     إذا كانت الفاتورة القديمة تقسيطاً، كان الكود يعامل oldCashAmount = 0
+     ولا يعكس مقدم التقسيط عند تعديل الفاتورة. الآن يُعكس المقدم فقط
+     (بطريقة cash مثلما أُضيف وقت الإنشاء).
+     ═══════════════════════════════════════════════════════════ */
+  const oldWasInstallment = oldPayment === 'installment';
+  const oldInst = oldWasInstallment
+    ? getSaleInvoiceInstallment(id, inv.customer, inv.total)
+    : null;
+  const oldDownPayment = oldInst
+    ? Number(inv.installmentDownPayment != null ? inv.installmentDownPayment : oldInst.downPayment)
+    : Number(inv.installmentDownPayment || 0);
   const oldCashAmount = oldInvoiceType === 'ajel'
     ? oldPaidAjel
-    : ((oldPayment !== 'installment') ? oldTotal : 0);
+    : (oldWasInstallment
+        ? (newPayment === 'installment' ? 0 : oldDownPayment)
+        : oldTotal);
   if (oldCashAmount > 0) {
-    addCashEntry('out', oldCashAmount, oldPayment || 'cash', `عكس دفعة سابقة - تعديل فاتورة بيع #${id}`);
+    addCashEntry('out', oldCashAmount, oldWasInstallment ? 'cash' : (oldPayment || 'cash'), `عكس دفعة سابقة - تعديل فاتورة بيع #${id}`);
   }
 
   const preservedPaid = Math.max(0, Math.min(Number(inv.paidAmount || 0), newTotal));
@@ -9447,6 +9507,12 @@ function saveEditSaleInvoice() {
     : ((newPayment !== 'installment') ? newTotal : 0);
   if (newCashAmount > 0) {
     addCashEntry('in', newCashAmount, newPayment || 'cash', `دفعة معدلة - فاتورة بيع #${id}`);
+  }
+
+  // إذا كانت الفاتورة القديمة تقسيطاً والجديدة غير تقسيط، احذف سجل التقسيط المرتبط
+  if (oldWasInstallment && newPayment !== 'installment' && oldInst) {
+    const oldInstIdx = DB.installments.indexOf(oldInst);
+    if (oldInstIdx !== -1) DB.installments.splice(oldInstIdx, 1);
   }
 
   const treasuryMsg = (oldCashAmount > 0 && newCashAmount > 0)
