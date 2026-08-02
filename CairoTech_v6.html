@@ -3758,10 +3758,10 @@ function consumeNoSerialCost(productId, qty) {
   return { totalCost, unitCost };
 }
 
-function addCashEntry(type, amount, method, desc) {
+function addCashEntry(type, amount, method, desc, meta) {
   const balance = DB.cashFlow.reduce((sum, c) => sum + (c.type === 'in' ? (c.amount || 0) : -(c.amount || 0)), 0);
   const newBalance = type === 'in' ? balance + amount : balance - amount;
-  DB.cashFlow.unshift({
+  const entry = {
     id: Date.now(),
     date: new Date().toISOString(),
     type,
@@ -3770,8 +3770,13 @@ function addCashEntry(type, amount, method, desc) {
     desc,
     balance: newBalance,
     user: currentUser ? currentUser.username : 'system'
-  });
+  };
+  if (meta && typeof meta === 'object') {
+    Object.keys(meta).forEach(k => { entry[k] = meta[k]; });
+  }
+  DB.cashFlow.unshift(entry);
   saveDB();
+  return entry;
 }
 
 function runFinanceStockRecheck(contextLabel = '') {
@@ -6247,7 +6252,7 @@ function saveInstallmentPayment() {
     inst.status = 'closed';
   }
   
-  addCashEntry('in', amount, method, `قسيط ${inst.customer}`);
+  addCashEntry('in', amount, method, `قسيط ${inst.customer}`, { refId: inst.id, refType: 'installment-payment' });
   logActivity('دفع قسيط', `${inst.customer} - ${formatMoney(amount)}`);
   
   saveDB();
@@ -9298,6 +9303,24 @@ function getSaleInvoiceInstallment(invoiceId, customer, total) {
     || (DB.installments || []).find(x => x.customer === customer && Number(x.total) === Number(total));
 }
 
+/* ═══════════════════════════════════════════════════════════
+   FIX (AUDIT): دالة مساعدة لعكس جميع حركات الخزنة المرتبطة
+   بعقد تقسيط (المقدم + الأقساط الشهرية المدفوعة). تُستخدم عند
+   حذف فاتورة بيع تقسيط أو عند تعديل فاتورة تقسيط إلى غير تقسيط،
+   حتى لا تبقى أقساط مدفوعة كحركة خزنة يتيمة.
+   ═══════════════════════════════════════════════════════════ */
+function reverseInstallmentTreasury(inst, reason) {
+  if (!inst) return;
+  const downPayment = Number(inst.downPayment || 0);
+  if (downPayment > 0) {
+    addCashEntry('out', downPayment, 'cash', `إلغاء مقدم تقسيط - ${reason || inst.customer}`);
+  }
+  DB.cashFlow.filter(c => c.refId === inst.id && c.refType === 'installment-payment' && c.type === 'in')
+    .forEach(pc => {
+      addCashEntry('out', pc.amount || 0, pc.method || 'cash', `إلغاء قسط مدفوع - ${reason || inst.customer}`);
+    });
+}
+
 function deleteSaleInvoice(id) {
   const inv = DB.saleInvoices.find(i => i.id === id);
   if (!inv) return;
@@ -9336,13 +9359,22 @@ function deleteSaleInvoice(id) {
      ═══════════════════════════════════════════════════════════ */
   if (inv.payment === 'installment') {
     const inst = getSaleInvoiceInstallment(id, inv.customer, inv.total);
-    const downPayment = Number(inv.installmentDownPayment != null ? inv.installmentDownPayment : (inst ? inst.downPayment : 0));
-    if (downPayment > 0) {
-      addCashEntry('out', downPayment, 'cash', `إلغاء مقدم تقسيط لفاتورة بيع #${id} - ${inv.customer}`);
-    }
+    /* ═══════════════════════════════════════════════════════════
+       FIX (AUDIT): عند دفع أقساط شهرية على عقد التقسيط يُسجّل
+       مبلغ القسط في الخزنة (addCashEntry in). عند حذف فاتورة
+       التقسيط كان يُعكس المقدم فقط ويُحذف سجل التقسيط، تاركاً
+       الأقساط المدفوعة حركة خزنة يتيمة. الآن تُعكس جميع حركات
+       الخزنة المرتبطة بالعقد (المقدم + الأقساط المدفوعة).
+       ═══════════════════════════════════════════════════════════ */
     if (inst) {
+      reverseInstallmentTreasury(inst, `فاتورة بيع #${id} - ${inv.customer}`);
       const instIdx = DB.installments.indexOf(inst);
       if (instIdx !== -1) DB.installments.splice(instIdx, 1);
+    } else {
+      const downPayment = Number(inv.installmentDownPayment != null ? inv.installmentDownPayment : 0);
+      if (downPayment > 0) {
+        addCashEntry('out', downPayment, 'cash', `إلغاء مقدم تقسيط لفاتورة بيع #${id} - ${inv.customer}`);
+      }
     }
   } else if (inv.invoiceType === 'cash' && inv.total > 0) {
     addCashEntry('out', inv.total, inv.payment || 'cash', `إلغاء فاتورة بيع #${id} - ${inv.customer}`);
@@ -9529,13 +9561,24 @@ function saveEditSaleInvoice() {
   const oldDownPayment = oldInst
     ? Number(inv.installmentDownPayment != null ? inv.installmentDownPayment : oldInst.downPayment)
     : Number(inv.installmentDownPayment || 0);
+  /* ═══════════════════════════════════════════════════════════
+     FIX (AUDIT): عند تعديل فاتورة تقسيط إلى غير تقسيط، كان الكود
+     يعكس المقدم فقط ويحذف سجل التقسيط، تاركاً الأقساط الشهرية
+     المدفوعة حركة خزنة يتيمة. الآن تُعكس جميع حركات الخزنة
+     المرتبطة بالعقد (المقدم + الأقساط المدفوعة) عبر الدالة
+     reverseInstallmentTreasury، ويُمنع العكس المزدوج للمقدم.
+     ═══════════════════════════════════════════════════════════ */
+  const convertingAwayFromInstallment = oldWasInstallment && newPayment !== 'installment' && !!oldInst;
   const oldCashAmount = oldInvoiceType === 'ajel'
     ? oldPaidAjel
     : (oldWasInstallment
-        ? (newPayment === 'installment' ? 0 : oldDownPayment)
+        ? (newPayment === 'installment' || convertingAwayFromInstallment ? 0 : oldDownPayment)
         : oldTotal);
   if (oldCashAmount > 0) {
     addCashEntry('out', oldCashAmount, oldWasInstallment ? 'cash' : (oldPayment || 'cash'), `عكس دفعة سابقة - تعديل فاتورة بيع #${id}`);
+  }
+  if (convertingAwayFromInstallment) {
+    reverseInstallmentTreasury(oldInst, `تعديل فاتورة بيع #${id} - ${inv.customer}`);
   }
 
   const preservedPaid = Math.max(0, Math.min(Number(inv.paidAmount || 0), newTotal));
